@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build the Brightloop subscription platform described in `docs/requirements.md`. Status: planning only; no milestone is complete. Stack/version remain unconfirmed. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
+Build the Brightloop subscription platform described in `docs/requirements.md`. Status: planning and a static wireframe; no application milestone is complete. React/TypeScript, Express/TypeScript and PostgreSQL form the working baseline; versions/ORM/hosting remain open. Use `docs/api-contracts.md` for shared interfaces and proposed MVP policies. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
 
 ## Milestones
 

@@ -2,6 +2,8 @@
 
 Owner: **albinsavi123-lang**. Backend/contracts: **Vishnu912py**. Schema/fixtures: **Zenfox-690**.
 
+Integration update: use the newer [API contracts](api-contracts.md), [OpenAPI schemas](api/openapi.json) and [shared response examples](api/examples/manifest.json) when replacing wireframe mocks. The HTTP contract takes precedence over prototype fixture formats and action timing; for example, scheduled lifecycle actions return effective dates and backend-generated capabilities rather than blindly changing the UI immediately.
+
 ## Open the wireframe
 
 Open [wireframes/index.html](wireframes/index.html) in a browser after cloning the repository. It requires no install, build, server, or external assets. GitHub shows HTML source rather than running it; use the screenshot below for an immediate preview.

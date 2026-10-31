@@ -1,0 +1,48 @@
+{
+  "data": {
+    "payment": {
+      "id": "00000000-0000-4000-8000-000000000300",
+      "invoice_id": "00000000-0000-4000-8000-000000000200",
+      "invoice_number": "INV-0001",
+      "customer_id": "00000000-0000-4000-8000-000000000010",
+      "amount": "680.00",
+      "currency": "INR",
+      "method": "bank_transfer",
+      "payment_date": "2026-10-31",
+      "note": "Remaining balance",
+      "recorded_by": "00000000-0000-4000-8000-000000000001",
+      "created_at": "2026-10-31T04:30:00Z"
+    },
+    "invoice": {
+      "id": "00000000-0000-4000-8000-000000000200",
+      "version": 2,
+      "created_at": "2026-10-31T04:30:00Z",
+      "updated_at": "2026-10-31T04:30:00Z",
+      "number": "INV-0001",
+      "subscription_id": "00000000-0000-4000-8000-000000000100",
+      "subscription_number": "SUB-0001",
+      "customer_id": "00000000-0000-4000-8000-000000000010",
+      "customer_name": "Acme Studio",
+      "status": "paid",
+      "currency": "INR",
+      "period_start": "2026-10-01",
+      "period_end": "2026-11-01",
+      "issue_date": "2026-10-01",
+      "due_date": "2026-10-08",
+      "subtotal": "1000.00",
+      "discount_total": "0.00",
+      "tax_total": "180.00",
+      "total": "1180.00",
+      "amount_paid": "1180.00",
+      "balance_due": "0.00",
+      "is_overdue": false,
+      "capabilities": {
+        "can_confirm": false,
+        "can_cancel": false,
+        "can_send": true,
+        "can_print": true,
+        "can_record_payment": false
+      }
+    }
+  }
+}

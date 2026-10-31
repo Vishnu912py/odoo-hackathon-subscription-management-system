@@ -6,7 +6,9 @@ Build a unified platform for Brightloop Software to manage products, recurring p
 
 Planning only: this repository contains documentation, with no application scaffold, dependencies, migrations, or runnable tests yet. Installation and start commands will be added after scaffolding.
 
-The original documentation proposed an Odoo-based implementation. The supplied problem statement does not explicitly mandate that framework; stack, version/edition and deployment target remain to be confirmed by the team lead.
+The original documentation proposed an Odoo-based implementation. The supplied problem statement does not explicitly mandate that framework.
+
+The subsequent UI, schema and API handoffs use **React + TypeScript, Express + TypeScript and PostgreSQL** as the working implementation baseline. Runtime versions, ORM and deployment target remain open. The [API contracts](docs/api-contracts.md) now define shared request/response formats and proposed MVP policies; they supersede older open questions where explicitly resolved.
 
 ## Team responsibilities
 
@@ -21,6 +23,8 @@ See [team responsibilities](docs/team-responsibilities.md) for work packages and
 Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md), including relationships, constraints and unresolved billing policies.
 
 Frontend implementation starts with the [UI wireframe and handoff](docs/ui-wireframe.md). Open `docs/wireframes/index.html` locally to explore the admin, staff and customer screens with sample data.
+
+All three contributors should use the [API integration guide](docs/api-contracts.md), [OpenAPI file](docs/api/openapi.json) and [shared examples](docs/api/examples/manifest.json) before implementing their interfaces. These define the target contract, not running endpoints.
 
 ## Required user journey
 

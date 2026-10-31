@@ -1,0 +1,32 @@
+{
+  "subscription-create.json": {
+    "schema": "SubscriptionInput"
+  },
+  "subscription-active.json": {
+    "schema": "SubscriptionResponse"
+  },
+  "subscription-created.json": {
+    "schema": "SubscriptionResponse"
+  },
+  "subscription-list.json": {
+    "schema": "SubscriptionSummaryListResponse"
+  },
+  "invoice-partial.json": {
+    "schema": "InvoiceResponse"
+  },
+  "payment-create.json": {
+    "schema": "PaymentInput"
+  },
+  "payment-result.json": {
+    "schema": "PaymentResultResponse"
+  },
+  "overview.json": {
+    "schema": "OverviewResponse"
+  },
+  "validation-error.json": {
+    "schema": "Error"
+  },
+  "customer-session.json": {
+    "schema": "SessionResponse"
+  }
+}

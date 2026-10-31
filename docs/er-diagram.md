@@ -2,6 +2,8 @@
 
 Owner: **Zenfox-690**. Backend integration/reviewer: **Vishnu912py**. Frontend consumer: **albinsavi123-lang**.
 
+Implementation update: the newer [API contract guide](api-contracts.md) resolves earlier open policies with proposed MVP defaults and adds persistence requirements in section 8 (versions, sessions, idempotency, jobs, snapshots and effective scheduling). Use it alongside this logical ER model. In particular, explicit included-line pricing replaces the allocation proposal below, and API expiry dates are exclusive. Do not assume the original diagram alone covers every infrastructure table.
+
 Design baseline: the React/Express/PostgreSQL stack discussed with Vishnu. This is a proposed logical schema, not an applied migration. Versions, hosting and business-policy defaults still need agreement. It covers [R01-R12](requirements.md); diagrams use Mermaid and render on GitHub. `PK` = primary key, `FK` = foreign key, `UK` = unique key. A circle means optional, a crow's foot means many. Repeated entities across diagrams refer to the same table.
 
 ## 1. Accounts, catalog and plans

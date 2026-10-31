@@ -4,6 +4,8 @@ Status: proposed guidance, not an existing system. No application code or API ex
 
 The [ER diagram and schema handoff](er-diagram.md) develops the proposed entities below into a PostgreSQL schema design using the React/Express/PostgreSQL baseline discussed with Vishnu. It is not an applied migration; runtime versions, hosting and listed business-policy decisions remain open.
 
+The newer [API contracts](api-contracts.md) are the implementation baseline for shared HTTP shapes. Sections 2 and 6 propose concrete defaults for the role matrix, currency/timezone, pricing, tax/discount order, scheduling and cancellation listed below. Section 8 identifies schema additions. Treat the following register as the original decision inventory; use the API guide's explicit defaults unless changed in a coordinated contract PR. Runtime versions/hosting remain unselected.
+
 ## Decisions register
 
 | Decision | Status | Owner |

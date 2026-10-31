@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Correct the highlighted fields.",
+    "fields": [
+      {
+        "path": "lines.0.quantity",
+        "code": "MUST_BE_POSITIVE",
+        "message": "Quantity must be greater than zero."
+      }
+    ],
+    "request_id": "00000000-0000-4000-8000-000000000900"
+  }
+}

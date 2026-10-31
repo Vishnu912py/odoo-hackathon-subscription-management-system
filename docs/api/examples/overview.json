@@ -1,0 +1,23 @@
+{
+  "data": {
+    "from": "2026-10-01",
+    "to": "2026-10-31",
+    "as_of": "2026-10-31",
+    "currency": "INR",
+    "active_subscriptions": 2,
+    "paused_subscriptions": 0,
+    "invoiced_total": "3304.00",
+    "payments_received": "2624.00",
+    "outstanding_balance": "680.00",
+    "overdue_balance": "680.00",
+    "overdue_invoice_count": 1,
+    "monthly": [
+      {
+        "month": "2026-10",
+        "invoiced_total": "3304.00",
+        "payments_received": "2624.00"
+      }
+    ],
+    "revenue_basis": "invoiced_excluding_cancelled"
+  }
+}

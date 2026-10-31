@@ -1,0 +1,14 @@
+{
+  "data": {
+    "user": {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "email": "owner@acme.example",
+      "display_name": "Acme owner",
+      "role": "customer",
+      "customer_id": "00000000-0000-4000-8000-000000000010",
+      "is_active": true
+    },
+    "csrf_token": "example-only-not-a-real-token-00000001",
+    "expires_at": "2026-11-01T04:30:00Z"
+  }
+}
