@@ -56,7 +56,8 @@ The dashboard prototype uses illustrative data; navigation labels and preview co
 - [x] Local PostgreSQL 18: both migrations applied, migration status up to date, synthetic seed loaded, and `npm run test:db` passed 13 checks.
 - [x] Running backend `/health/ready`: HTTP 200 with `database: connected`.
 - [x] PR #4 PostgreSQL 16 CI: backend checks, migrations, two seed runs and live constraint suite succeeded.
-- [ ] Real authenticated business journey, concurrency/recovery acceptance checks and under-two-second page performance verified.
+- [x] Milestone D5 PostgreSQL 16 Benchmark (10k subscriptions, 100k invoices): all 8 reporting scenarios execute under 2.0s (worst-case staff multi-year p95: 908.58ms; customer queries: 18ms–24ms; see [D5 Benchmark Report](docs/database-performance-benchmark.md)).
+- [ ] Real authenticated business journey and concurrency/recovery acceptance checks.
 
 These results cover foundation checks, not completed authentication, billing or reporting. See [team responsibilities](docs/team-responsibilities.md) and the [acceptance checklist](plan.md).
 

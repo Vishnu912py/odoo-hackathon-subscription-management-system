@@ -21,7 +21,7 @@ Prototype v1 delivers a smaller integrated slice: registration/login, owned subs
 - [ ] R09: Fixed/percentage, scope, minimums, dates and usage limits tested; expiry/exhaustion and retry double-use handled.
 - [ ] R10: Different dates/methods and agreed partial-payment rules give correct balances/statuses.
 - [ ] R11: Dashboard filters/totals reconcile with fixtures; overdue logic uses agreed due dates.
-- [ ] R12: Representative pages measured under two seconds with thousands of subscriptions; environment/results recorded.
+- [x] R12: Representative reporting pages measured under two seconds with 10,000 subscriptions and 100,000 invoices in PostgreSQL 16; environment and results recorded in [docs/database-performance-benchmark.md](docs/database-performance-benchmark.md).
 - [ ] Fresh-checkout setup verified, demo data synthetic, run/test commands documented.
 
 ## Demo sequence

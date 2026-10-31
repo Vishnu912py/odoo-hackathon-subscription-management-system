@@ -13,6 +13,7 @@ The [backend setup guide](../backend/README.md) describes the runnable server fo
 - [Frontend wireframe and handoff](ui-wireframe.md): clickable local UI reference, screen map, shared components and implementation sequence for Albin.
 - [API contracts and integration guide](api-contracts.md): shared HTTP conventions, roles, business defaults, database additions and integration exercise.
 - [API impact and schema alignment](api-impact.md): database-to-API impact matrix, confirmed decisions analysis, and team coordination checklist.
+- [Database performance benchmark (D5)](database-performance-benchmark.md): benchmark architecture, 10k subs / 100k invoices dataset, query plan profiling and R12 verification.
 - [OpenAPI v0.1 contract](api/openapi.json): machine-readable operations and payload schemas; [example manifest](api/examples/manifest.json) maps fixtures to schemas.
 - [Database guide](../database/README.md): database setup, schema, migrations, seed fixtures, and test suite.
 - [Roadmap](../plan.md): implementation order and demo checklist.
