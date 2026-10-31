@@ -76,6 +76,7 @@ jobs:
 
       - name: Run Live PostgreSQL Constraint Integration Tests
         run: |
+          set -o pipefail
           npm run test:db 2>&1 | tee test-results.log
 
       - name: Test authenticated prototype against an isolated PostgreSQL schema
