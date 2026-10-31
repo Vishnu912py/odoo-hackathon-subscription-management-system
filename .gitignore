@@ -16,3 +16,9 @@ backend/coverage/
 .DS_Store
 __pycache__/
 *.pyc
+
+# Video demo intermediate clips
+video-demo/output/clips/*
+!video-demo/output/clips/.gitkeep
+
+

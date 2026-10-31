@@ -1,0 +1,147 @@
+{
+  "project": {
+    "name": "Brightloop Software",
+    "description": "Enterprise Subscription & Recurring Revenue Management Platform",
+    "hackathon": "Odoo Hackathon 2026",
+    "team": [
+      { "name": "Vishnu912py", "role": "Team Lead & Architecture" },
+      { "name": "Zenfox-690", "role": "Database & Persistence Specialist" },
+      { "name": "albinsavi123-lang", "role": "Frontend & UI Specialist" }
+    ],
+    "target_resolution": { "width": 1920, "height": 1080 },
+    "fps": 30,
+    "voice": "en-US-JennyNeural"
+  },
+  "scenes": [
+    {
+      "id": "scene_01_intro",
+      "scene_number": 1,
+      "title": "Brightloop — Next-Gen Subscription Management",
+      "section": "INTRODUCTION",
+      "is_slot": false,
+      "slot_name": null,
+      "narration": "Welcome to Brightloop Software — a modern, resilient subscription management and recurring revenue platform engineered for high-concurrency SaaS operations.",
+      "image_asset": "assets/graphics/scene_01_intro.png",
+      "transition": "fade",
+      "status": "implemented_graphics",
+      "slot_notes": "Title branding sequence with animated glow."
+    },
+    {
+      "id": "scene_02_problem",
+      "scene_number": 2,
+      "title": "The Recurring Revenue Dilemma",
+      "section": "PROBLEM STATEMENT",
+      "is_slot": false,
+      "slot_name": null,
+      "narration": "Modern businesses struggle with fractured subscription lifecycles, race conditions in automated billing runs, duplicate invoices, and manual payment reconciliations that bleed revenue.",
+      "image_asset": "assets/graphics/scene_02_problem.png",
+      "transition": "fade",
+      "status": "implemented_graphics",
+      "slot_notes": "Visualizing revenue leakage and concurrency race conditions."
+    },
+    {
+      "id": "scene_03_solution",
+      "scene_number": 3,
+      "title": "Engineered for Financial Correctness",
+      "section": "SOLUTION ARCHITECTURE",
+      "is_slot": false,
+      "slot_name": null,
+      "narration": "Brightloop solves this from the ground up. Combining strict transaction boundaries, database-enforced state machines, and transparent customer self-service, it guarantees financial correctness at every step.",
+      "image_asset": "assets/graphics/scene_03_solution.png",
+      "transition": "fade",
+      "status": "implemented_graphics",
+      "slot_notes": "Core Brightloop architectural pillars."
+    },
+    {
+      "id": "scene_04_architecture",
+      "scene_number": 4,
+      "title": "Modern Full-Stack Architecture",
+      "section": "SYSTEM ARCHITECTURE",
+      "is_slot": false,
+      "slot_name": null,
+      "narration": "Built on Node.js 24, Express 5, React 19, and PostgreSQL 16 with Prisma ORM. Strict OpenAPI 3.1 contracts ensure seamless type safety and security across the entire stack.",
+      "image_asset": "assets/graphics/scene_04_architecture.png",
+      "transition": "fade",
+      "status": "implemented_graphics",
+      "slot_notes": "End-to-end component breakdown matching repository."
+    },
+    {
+      "id": "scene_05_slot1_dashboard",
+      "scene_number": 5,
+      "title": "Workspace & Role-Based Access Control",
+      "section": "FEATURE WALKTHROUGH",
+      "is_slot": true,
+      "slot_name": "slot1_main_dashboard",
+      "narration": "Brightloop features role-based access control, session-based authentication with CSRF protection, and segregated workspaces for administrators, billing specialists, and customers.",
+      "image_asset": "assets/placeholders/slot1_main_dashboard.png",
+      "transition": "fade",
+      "status": "modular_reserved_slot",
+      "slot_notes": "REPLACEABLE SLOT 1: Replace with live screen capture of admin/staff workspace and authentication."
+    },
+    {
+      "id": "scene_06_slot2_subscriptions",
+      "scene_number": 6,
+      "title": "Deterministic Subscription Lifecycle",
+      "section": "FEATURE WALKTHROUGH",
+      "is_slot": true,
+      "slot_name": "slot2_subscription_mgmt",
+      "narration": "Subscriptions follow a rigorous lifecycle from quotation to activation. Plan policies enforce pause intervals, renewal rules, and automatic closures, backed by atomic database constraints.",
+      "image_asset": "assets/placeholders/slot2_subscription_mgmt.png",
+      "transition": "fade",
+      "status": "modular_reserved_slot",
+      "slot_notes": "REPLACEABLE SLOT 2: Replace with live screen capture of subscription creation, quotation, and activation."
+    },
+    {
+      "id": "scene_07_slot3_invoices_payments",
+      "scene_number": 7,
+      "title": "Transactional Billing & Payment Tracking",
+      "section": "FEATURE WALKTHROUGH",
+      "is_slot": true,
+      "slot_name": "slot3_invoice_payment",
+      "narration": "Billing runs utilize database-level advisory locking and recovery leases to guarantee crash safety. Invoices calculate precise tax and discount rules, with idempotent payment recording.",
+      "image_asset": "assets/placeholders/slot3_invoice_payment.png",
+      "transition": "fade",
+      "status": "modular_reserved_slot",
+      "slot_notes": "REPLACEABLE SLOT 3: Replace with live screen capture of invoice generation, tax/discount calculation, and payment registration."
+    },
+    {
+      "id": "scene_08_slot4_portal",
+      "scene_number": 8,
+      "title": "Customer Self-Service Portal",
+      "section": "FEATURE WALKTHROUGH",
+      "is_slot": true,
+      "slot_name": "slot4_customer_portal",
+      "narration": "Customers enjoy a dedicated self-service portal to review active subscriptions, download invoices, and inspect payment histories — completely isolated at the database level.",
+      "image_asset": "assets/placeholders/slot4_customer_portal.png",
+      "transition": "fade",
+      "status": "modular_reserved_slot",
+      "slot_notes": "REPLACEABLE SLOT 4: Replace with live screen capture of customer portal self-service view."
+    },
+    {
+      "id": "scene_09_slot5_reporting",
+      "scene_number": 9,
+      "title": "High-Performance Analytics & Verification",
+      "section": "FEATURE WALKTHROUGH",
+      "is_slot": true,
+      "slot_name": "slot5_reporting_dashboard",
+      "narration": "Our reporting persistence layer delivers sub-second analytics across 100,000 invoices under RepeatableRead transaction snapshots — fully verified for enterprise scale.",
+      "image_asset": "assets/placeholders/slot5_reporting_dashboard.png",
+      "transition": "fade",
+      "status": "modular_reserved_slot",
+      "slot_notes": "REPLACEABLE SLOT 5: Replace with live screen capture of reports dashboard with real-time filters."
+    },
+    {
+      "id": "scene_10_closing",
+      "scene_number": 10,
+      "title": "Brightloop — Built for Scale & Reliability",
+      "section": "CONCLUSION",
+      "is_slot": false,
+      "slot_name": null,
+      "narration": "Brightloop: predictable recurring revenue, bulletproof persistence, and exceptional user experience. Built with passion for the Odoo Hackathon.",
+      "image_asset": "assets/graphics/scene_10_closing.png",
+      "transition": "fade",
+      "status": "implemented_graphics",
+      "slot_notes": "Closing credits, team acknowledgements, and GitHub repository links."
+    }
+  ]
+}
