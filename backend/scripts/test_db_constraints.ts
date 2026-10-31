@@ -407,6 +407,33 @@ async function runConstraintTests() {
   console.log(' PART 3: D3-B HISTORICAL DISCOUNT ELIGIBILITY, TIMELINE & USAGE LOCKING TESTS');
   console.log('================================================================================');
 
+  const histCust = await prisma.customer.findFirstOrThrow();
+  const histPlan = await prisma.plan.findFirstOrThrow();
+  const histProd = await prisma.product.findFirstOrThrow();
+
+  const historicalSubscription = await prisma.subscription.create({
+    data: {
+      number: `SUB-HIST-DISC-${runId}`,
+      customerId: histCust.id,
+      planId: histPlan.id,
+      status: 'ACTIVE',
+      billingInterval: BillingInterval.MONTHLY,
+      startDate: new Date('2024-01-01T00:00:00.000Z'),
+      nextBillingDate: new Date('2025-01-01T00:00:00.000Z'),
+      lines: {
+        create: {
+          productId: histProd.id,
+          description: 'Historical Base Service',
+          quantity: 1,
+          unitPrice: 500.00,
+          effectiveFrom: new Date('2024-01-01T00:00:00.000Z'),
+          effectiveUntil: null,
+        },
+      },
+    },
+    include: { customer: true, plan: true, lines: true },
+  });
+
   // 14. A rule active during a past period but inactive now IS eligible
   await assertResolves('D3-B: Rule active in past period but inactive now is eligible for historical period', async () => {
     const historicalRule = await prisma.discountRule.create({
@@ -439,12 +466,12 @@ async function runConstraintTests() {
     });
 
     await prisma.subscriptionDiscount.create({
-      data: { subscriptionId: testSubscription.id, discountRuleId: historicalRule.id },
+      data: { subscriptionId: historicalSubscription.id, discountRuleId: historicalRule.id },
     });
 
     // Invoicing for a period inside the active interval [2025-02-01, 2025-03-01)
     const res = await createSubscriptionInvoice(prisma, {
-      subscriptionId: testSubscription.id,
+      subscriptionId: historicalSubscription.id,
       periodStart: '2025-02-01',
       periodEnd: '2025-03-01',
     });
@@ -479,12 +506,12 @@ async function runConstraintTests() {
     });
 
     await prisma.subscriptionDiscount.create({
-      data: { subscriptionId: testSubscription.id, discountRuleId: futureRule.id },
+      data: { subscriptionId: historicalSubscription.id, discountRuleId: futureRule.id },
     });
 
     // Invoicing for 2025-03-01 to 2025-04-01 (before futureRule became active)
     const res = await createSubscriptionInvoice(prisma, {
-      subscriptionId: testSubscription.id,
+      subscriptionId: historicalSubscription.id,
       periodStart: '2025-03-01',
       periodEnd: '2025-04-01',
     });
@@ -525,12 +552,12 @@ async function runConstraintTests() {
     });
 
     await prisma.subscriptionDiscount.create({
-      data: { subscriptionId: testSubscription.id, discountRuleId: pastDeactivatedRule.id },
+      data: { subscriptionId: historicalSubscription.id, discountRuleId: pastDeactivatedRule.id },
     });
 
     // Invoicing for 2025-04-01 to 2025-05-01 (after rule was deactivated)
     const res = await createSubscriptionInvoice(prisma, {
-      subscriptionId: testSubscription.id,
+      subscriptionId: historicalSubscription.id,
       periodStart: '2025-04-01',
       periodEnd: '2025-05-01',
     });
@@ -562,11 +589,11 @@ async function runConstraintTests() {
     });
 
     await prisma.subscriptionDiscount.create({
-      data: { subscriptionId: testSubscription.id, discountRuleId: partialCoverageRule.id },
+      data: { subscriptionId: historicalSubscription.id, discountRuleId: partialCoverageRule.id },
     });
 
     const res = await createSubscriptionInvoice(prisma, {
-      subscriptionId: testSubscription.id,
+      subscriptionId: historicalSubscription.id,
       periodStart: '2025-05-01',
       periodEnd: '2025-06-01',
     });
@@ -599,13 +626,13 @@ async function runConstraintTests() {
     });
 
     await prisma.subscriptionDiscount.create({
-      data: { subscriptionId: testSubscription.id, discountRuleId: singleUseRule.id },
+      data: { subscriptionId: historicalSubscription.id, discountRuleId: singleUseRule.id },
     });
 
     // Run two concurrent invoice generations for different billing periods
     const [raceInv1, raceInv2] = await Promise.all([
-      createSubscriptionInvoice(prisma, { subscriptionId: testSubscription.id, periodStart: '2027-01-01', periodEnd: '2027-02-01' }),
-      createSubscriptionInvoice(prisma, { subscriptionId: testSubscription.id, periodStart: '2027-02-01', periodEnd: '2027-03-01' }),
+      createSubscriptionInvoice(prisma, { subscriptionId: historicalSubscription.id, periodStart: '2025-06-01', periodEnd: '2025-07-01' }),
+      createSubscriptionInvoice(prisma, { subscriptionId: historicalSubscription.id, periodStart: '2025-07-01', periodEnd: '2025-08-01' }),
     ]);
 
     const totalRedeemed = await prisma.discountRedemption.count({
@@ -654,6 +681,7 @@ async function runConstraintTests() {
       paymentDate: '2027-03-05',
       note: 'Partial payment 1',
       expectedVersion: paymentTestInvoice.version,
+      today: '2027-04-10',
     });
 
     if (res.isReplay) throw new Error('Expected new payment, got replay');
@@ -671,6 +699,7 @@ async function runConstraintTests() {
         method: 'card',
         amount: 700.00, // Balance is 600.00, so 700.00 exceeds
         paymentDate: '2027-03-06',
+        today: '2027-04-10',
       });
     },
     ['payment_exceeds_balance', 'exceeds']
@@ -687,6 +716,7 @@ async function runConstraintTests() {
       amount: 600.00,
       paymentDate: '2027-03-07',
       expectedVersion: currentInv.version,
+      today: '2027-04-10',
     });
 
     if (Number(res.invoice.amountPaid) !== 1000.00) throw new Error(`Expected amountPaid 1000, got ${res.invoice.amountPaid}`);
@@ -702,6 +732,7 @@ async function runConstraintTests() {
       amount: 400.00,
       paymentDate: '2027-03-05',
       note: 'Partial payment 1',
+      today: '2027-04-10',
     });
 
     if (!replayRes.isReplay) throw new Error('Expected isReplay: true on identical retry');
@@ -718,6 +749,7 @@ async function runConstraintTests() {
         method: 'bank_transfer',
         amount: 500.00, // Changed payload amount
         paymentDate: '2027-03-05',
+        today: '2027-04-10',
       });
     },
     ['idempotency_conflict', 'different request contents']
@@ -751,6 +783,7 @@ async function runConstraintTests() {
         amount: 400.00,
         paymentDate: '2027-04-05',
         expectedVersion: raceInvoice.version,
+        today: '2027-04-10',
       }),
       applyInvoicePayment(prisma, {
         invoiceId: raceInvoice.id,
@@ -759,6 +792,7 @@ async function runConstraintTests() {
         amount: 400.00,
         paymentDate: '2027-04-05',
         expectedVersion: raceInvoice.version,
+        today: '2027-04-10',
       }),
     ]);
 
@@ -954,13 +988,25 @@ async function runConstraintTests() {
     const batch1 = await executeBillingRun(prisma, crashRun.id);
     if (batch1.processedCount !== 1) throw new Error(`Expected batch1 processedCount 1, got ${batch1.processedCount}`);
     if (!batch1.hasMore) throw new Error('Expected hasMore true after partial batch');
+    if (batch1.run.status !== 'IN_PROGRESS') {
+      throw new Error(`Expected batch1 run.status IN_PROGRESS while hasMore=true, got ${batch1.run.status}`);
+    }
+    if (batch1.run.completedAt !== null) {
+      throw new Error(`Expected batch1 run.completedAt null while hasMore=true, got ${batch1.run.completedAt}`);
+    }
 
     // Resume execution of the run with allowResume: true
     const batch2 = await executeBillingRun(prisma, crashRun.id, { allowResume: true });
+    if (batch2.processedCount < 1) {
+      throw new Error(`Expected batch2 to resume and process at least 1 subscription, got ${batch2.processedCount}`);
+    }
 
     // Verify subA was NOT billed twice
     const subAInvoices = await prisma.invoice.count({ where: { subscriptionId: subA.id } });
-    if (subAInvoices > 1) throw new Error(`Subscription A was invoiced ${subAInvoices} times! Expected 1.`);
+    if (subAInvoices > 1) throw new Error(`Subscription A was invoiced ${subAInvoices} times! Expected at most 1.`);
+
+    const subBInvoices = await prisma.invoice.count({ where: { subscriptionId: subB.id } });
+    if (subBInvoices > 1) throw new Error(`Subscription B was invoiced ${subBInvoices} times! Expected at most 1.`);
 
     // Verify cumulative durable counters
     const finalRun = await prisma.billingRun.findUniqueOrThrow({ where: { id: crashRun.id } });

@@ -121,7 +121,7 @@ export async function executeBillingRun(
    - If a crash occurs at subscription $N$, subscriptions $1 \dots N-1$ have their invoices, schedule advancements, and billing-run progress committed together.
    - Subscription $N$ rolls back cleanly.
    - Resuming the run via `executeBillingRun(prisma, runId, { allowResume: true })` queries due subscriptions whose `nextBillingDate <= asOfDate`. Subscriptions $1 \dots N-1$ are already advanced and skipped; subscription $N$ resumes cleanly.
-7. **Remaining Due & Pagination:** `hasMore` is evaluated directly by counting remaining subscriptions in PostgreSQL matching `nextBillingDate <= asOfDate` after the batch, eliminating counter-subtraction errors.
+7. **Remaining Due, Pagination & Resumable Status:** `hasMore` is evaluated directly by counting remaining subscriptions in PostgreSQL matching `nextBillingDate <= asOfDate` after the batch. When `hasMore: true`, status remains `IN_PROGRESS` and `completedAt: null` so subsequent batch executions can safely resume via `allowResume: true`. Terminal `COMPLETED` (or `FAILED`) status and `completedAt` timestamp are assigned only when no due subscriptions remain (`hasMore: false`).
 
 ---
 
@@ -179,4 +179,4 @@ To maintain single-source-of-truth persistence without altering the approved HTT
 - **TypeScript Compilation:** `npm run typecheck` passed with 0 errors.
 - **Backend Check Suite:** `npm run check` passed 15/15 unit and integration tests.
 - **Static Schema & DDL Integrity:** `python scripts/verify_schema_integrity.py` passed (32 models, 13 checks, 6 indexes).
-- **PostgreSQL 16 Integration Suite:** All 34 tests in `test_db_constraints.ts` pass against live PostgreSQL 16 Alpine in CI.
+- **PostgreSQL 16 Integration Suite:** All 36 tests in `test_db_constraints.ts` pass against live PostgreSQL 16 Alpine in CI (including historical discount activity intervals, concurrent usage limit locking, payment idempotency & allocation races, recoverable billing runs with partial-batch resume, and calendar recurrence date arithmetic).

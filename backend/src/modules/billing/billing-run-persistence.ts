@@ -283,9 +283,22 @@ export async function executeBillingRun(
       where: { id: runId },
     });
 
-    const finalStatus = (latestRun.invoicesFailed > 0 && latestRun.invoicesGenerated === 0 && latestRun.invoicesReused === 0)
-      ? 'FAILED'
-      : 'COMPLETED';
+    let finalStatus: string;
+    let completedAtDate: Date | null = null;
+
+    if (hasMore) {
+      // Due subscriptions remain: keep run resumable in IN_PROGRESS state
+      finalStatus = 'IN_PROGRESS';
+      completedAtDate = null;
+    } else if (latestRun.invoicesFailed > 0 && latestRun.invoicesGenerated === 0 && latestRun.invoicesReused === 0) {
+      // Batch complete but all invoices failed: mark FAILED
+      finalStatus = 'FAILED';
+      completedAtDate = new Date();
+    } else {
+      // Batch complete with successful/reused invoices: mark COMPLETED
+      finalStatus = 'COMPLETED';
+      completedAtDate = new Date();
+    }
 
     const updatedRun = await prisma.billingRun.update({
       where: { id: runId },
@@ -293,7 +306,7 @@ export async function executeBillingRun(
         status: finalStatus,
         hasMore,
         nextRunRequired,
-        completedAt: new Date(),
+        completedAt: completedAtDate,
         errors: errorDetails.length > 0
           ? (errorDetails as Prisma.InputJsonArray)
           : (latestRun.errors ? (latestRun.errors as Prisma.InputJsonValue) : Prisma.DbNull),
