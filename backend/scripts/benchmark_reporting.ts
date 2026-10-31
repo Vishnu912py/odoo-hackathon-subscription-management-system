@@ -251,7 +251,24 @@ export async function runBenchmarkSuite(options?: {
       }> = [];
 
       if (explain) {
-        // Profiling Query A: Invoices date-range lookup
+        const parseExplain = (row: any, queryName: string) => {
+          if (!row) return;
+          const planData = row['QUERY PLAN'] || row['query plan'] || Object.values(row)[0];
+          const rawPlan = Array.isArray(planData) ? planData[0] : planData;
+          if (rawPlan && rawPlan.Plan) {
+            const p = rawPlan.Plan;
+            queryPlans.push({
+              queryName,
+              planningTimeMs: rawPlan['Planning Time'] ?? 0,
+              executionTimeMs: rawPlan['Execution Time'] ?? 0,
+              sharedHitBlocks: p['Shared Hit Blocks'] ?? 0,
+              sharedReadBlocks: p['Shared Read Blocks'] ?? 0,
+              planSummary: `${p['Node Type']} (Cost: ${p['Total Cost']}, Rows: ${p['Plan Rows']})`,
+            });
+          }
+        };
+
+        // Query A: Invoices Range Filter
         const invExplainSql = sc.filter.customerUserId
           ? `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
              SELECT i.id, i.issue_date, i.total
@@ -276,21 +293,68 @@ export async function runBenchmarkSuite(options?: {
                AND i.issue_date >= '${sc.filter.from}'::date AND i.issue_date <= '${sc.filter.to}'::date`;
 
         try {
-          const explainRes = await pgClient.query(invExplainSql);
-          const rawPlan = explainRes.rows[0]?.[0] || explainRes.rows[0]?.['QUERY PLAN']?.[0];
-          if (rawPlan && rawPlan.Plan) {
-            const p = rawPlan.Plan;
-            queryPlans.push({
-              queryName: 'Invoices Range Filter',
-              planningTimeMs: rawPlan['Planning Time'] ?? 0,
-              executionTimeMs: rawPlan['Execution Time'] ?? 0,
-              sharedHitBlocks: p['Shared Hit Blocks'] ?? 0,
-              sharedReadBlocks: p['Shared Read Blocks'] ?? 0,
-              planSummary: `${p['Node Type']} (Cost: ${p['Total Cost']}, Rows: ${p['Plan Rows']})`,
-            });
-          }
+          const invRes = await pgClient.query(invExplainSql);
+          parseExplain(invRes.rows[0], 'Invoices Range Filter');
         } catch {
-          // Continue if explain format parsing differs
+          // ignore explain parse error
+        }
+
+        // Query B: Payments Range Filter
+        const payExplainSql = sc.filter.customerUserId
+          ? `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+             SELECT p.id, p.payment_date, p.amount
+             FROM payments p
+             JOIN invoices i ON p.invoice_id = i.id
+             JOIN subscriptions s ON i.subscription_id = s.id
+             JOIN customers c ON s.customer_id = c.id
+             WHERE c.user_id = '${sc.filter.customerUserId}'::uuid
+               AND p.payment_date >= '${sc.filter.from}'::date AND p.payment_date <= '${sc.filter.to}'::date`
+          : sc.filter.planId
+          ? `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+             SELECT p.id, p.payment_date, p.amount
+             FROM payments p
+             JOIN invoices i ON p.invoice_id = i.id
+             JOIN subscriptions s ON i.subscription_id = s.id
+             WHERE s.plan_id = '${sc.filter.planId}'::uuid
+               AND p.payment_date >= '${sc.filter.from}'::date AND p.payment_date <= '${sc.filter.to}'::date`
+          : `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+             SELECT p.id, p.payment_date, p.amount
+             FROM payments p
+             WHERE p.payment_date >= '${sc.filter.from}'::date AND p.payment_date <= '${sc.filter.to}'::date`;
+
+        try {
+          const payRes = await pgClient.query(payExplainSql);
+          parseExplain(payRes.rows[0], 'Payments Range Filter');
+        } catch {
+          // ignore explain parse error
+        }
+
+        // Query C: Outstanding Invoices Balance
+        const outExplainSql = sc.filter.customerUserId
+          ? `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+             SELECT i.due_date, i.total, i.amount_paid
+             FROM invoices i
+             JOIN subscriptions s ON i.subscription_id = s.id
+             JOIN customers c ON s.customer_id = c.id
+             WHERE c.user_id = '${sc.filter.customerUserId}'::uuid
+               AND i.status = 'CONFIRMED'`
+          : sc.filter.planId
+          ? `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+             SELECT i.due_date, i.total, i.amount_paid
+             FROM invoices i
+             JOIN subscriptions s ON i.subscription_id = s.id
+             WHERE s.plan_id = '${sc.filter.planId}'::uuid
+               AND i.status = 'CONFIRMED'`
+          : `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+             SELECT i.due_date, i.total, i.amount_paid
+             FROM invoices i
+             WHERE i.status = 'CONFIRMED'`;
+
+        try {
+          const outRes = await pgClient.query(outExplainSql);
+          parseExplain(outRes.rows[0], 'Outstanding Confirmed Filter');
+        } catch {
+          // ignore explain parse error
         }
       }
 
@@ -325,6 +389,24 @@ export async function runBenchmarkSuite(options?: {
         const invCol = `INR ${r.data.invoiced_total}`.padEnd(14);
         const outCol = `INR ${r.data.outstanding_balance}`;
         console.log(`${idCol} | ${nameCol} | ${medCol} | ${p95Col} | ${minCol} | ${maxCol} | ${invCol} | ${outCol}`);
+      }
+      console.log(`================================================================================\n`);
+
+      console.log(`================================================================================`);
+      console.log(` EXPLAIN (ANALYZE, BUFFERS) QUERY PLAN DETAILS`);
+      console.log(`================================================================================`);
+      for (const r of results) {
+        if (r.queryPlans && r.queryPlans.length > 0) {
+          console.log(`--- [${r.id}] ${r.name} ---`);
+          for (const qp of r.queryPlans) {
+            console.log(`  Query:          ${qp.queryName}`);
+            console.log(`  Plan:           ${qp.planSummary}`);
+            console.log(`  Planning Time:  ${qp.planningTimeMs.toFixed(3)} ms`);
+            console.log(`  Execution Time: ${qp.executionTimeMs.toFixed(3)} ms`);
+            console.log(`  Shared Hit:     ${qp.sharedHitBlocks} blocks`);
+            console.log(`  Shared Read:    ${qp.sharedReadBlocks} blocks`);
+          }
+        }
       }
       console.log(`================================================================================\n`);
     }
