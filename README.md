@@ -20,6 +20,8 @@ See [team responsibilities](docs/team-responsibilities.md) for work packages and
 
 Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md), including relationships, constraints and unresolved billing policies.
 
+Frontend implementation starts with the [UI wireframe and handoff](docs/ui-wireframe.md). Open `docs/wireframes/index.html` locally to explore the admin, staff and customer screens with sample data.
+
 ## Required user journey
 
 Register/sign in -> configure products and plans -> create quotation -> confirm and activate subscription -> generate recurring invoice with taxes/discounts -> record payment -> review dashboard.

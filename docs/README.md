@@ -8,6 +8,7 @@ Shared context for the three contributors and coding assistants. Read alongside 
 - [Team responsibilities](team-responsibilities.md): named owners, handoffs and completion criteria.
 - [Architecture and contracts](architecture.md): proposed entities, integration boundaries and unresolved decisions.
 - [ER diagram and schema handoff](er-diagram.md): PostgreSQL relationships, field definitions, constraints and billing transaction boundaries for Zenfox.
+- [Frontend wireframe and handoff](ui-wireframe.md): clickable local UI reference, screen map, shared components and implementation sequence for Albin.
 - [Roadmap](../plan.md): implementation order and demo checklist.
 - [Contributor guide](../contributing.md): branches, reviews and validation.
 - [Agent context](../agents.md): project instructions for coding assistants.

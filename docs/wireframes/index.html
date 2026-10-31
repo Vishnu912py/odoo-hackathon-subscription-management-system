@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Brightloop · UI wireframe</title>
+  <link rel="stylesheet" href="wireframe.css">
+</head>
+<body>
+  <div class="prototype"><strong>WIREFRAME / 01</strong><span>Sample data · simulated actions · no server connection</span><label>Preview role <select id="role"><option value="admin">Admin</option><option value="staff">Internal staff</option><option value="customer">Customer</option></select></label></div>
+  <div class="shell">
+    <aside><a class="brand" href="#dashboard"><span class="logo">b.</span> brightloop</a><p class="nav-label">SUBSCRIPTION WORKSPACE</p><nav id="nav" aria-label="Main navigation"></nav><div class="sidebar-note">One place for every<br>subscription.<hr><small>Frontend reference for<br><strong>albinsavi123-lang</strong></small></div></aside>
+    <main><header><div id="breadcrumb">Workspace / Overview</div><div class="identity"><span class="avatar">VL</span><span id="identity">Vishnu · Admin</span></div></header><div class="page"><div class="page-heading"><div><p class="eyebrow" id="eyebrow">WORKSPACE</p><h1 id="title"></h1><p id="subtitle"></p></div><div id="actions"></div></div><div class="state-controls"><label>Preview state <select id="state"><option value="ready">Ready</option><option value="loading">Loading</option><option value="empty">Empty</option><option value="error">Error</option><option value="forbidden">Access denied</option></select></label><span>Layout and behavior reference · proposed INR examples</span></div><div id="content"></div></div></main>
+  </div>
+  <dialog id="dialog"><form id="form"><div class="dialog-header"><div><p class="eyebrow">SAMPLE WORKFLOW</p><h2 id="dialog-title"></h2></div><button type="button" class="icon-button" id="close-dialog" aria-label="Close dialog">×</button></div><p class="muted">Prototype only. Values are not sent to a server or saved after this dialog closes.</p><div id="fields" class="form-grid"></div><div class="dialog-footer"><button type="button" id="cancel-dialog">Cancel</button><button class="primary" type="submit">Preview save</button></div></form></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="wireframe.js"></script>
+</body>
+</html>
