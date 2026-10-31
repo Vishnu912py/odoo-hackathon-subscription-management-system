@@ -7,13 +7,17 @@ import type {
   OverviewResponse,
   PaymentListResponse,
   Session,
-  SubscriptionSummary,
-  SubscriptionSummaryListResponse,
 } from '../../api/schema'
 import './live.css'
 import InvoiceDetails from './InvoiceDetails'
 import StaffManagement from './StaffManagement'
 import AuthView from './AuthView'
+import ProductsManagement from '../catalog/ProductsManagement'
+import PlansManagement from '../catalog/PlansManagement'
+import TaxesManagement from '../catalog/TaxesManagement'
+import DiscountsManagement from '../catalog/DiscountsManagement'
+import TemplatesManagement from '../catalog/TemplatesManagement'
+import SubscriptionsManagement from '../subscriptions/SubscriptionsManagement'
 import { FormAlert } from './FormFeedback'
 import {
   type LivePage,
@@ -86,21 +90,24 @@ function ConnectionStatus() {
 
 interface RecordsProps {
   session: Session
-  page: LivePage
+  page: 'Overview' | 'Invoices' | 'Payments'
+  selectedInvoiceId: string | null
+  onClearInvoiceId: () => void
   onExpired: () => void
 }
 
-function Records({ session, page, onExpired }: RecordsProps) {
+function Records({ session, page, selectedInvoiceId, onClearInvoiceId, onExpired }: RecordsProps) {
   const [pageNumber, setPageNumber] = useState(1)
   const [revision, setRevision] = useState(0)
   const [range, setRange] = useState({ from: today().slice(0, 7) + '-01', to: today() })
   const [draftRange, setDraftRange] = useState(range)
-  const [data, setData] = useState<OverviewResponse | SubscriptionSummaryListResponse | InvoiceSummaryListResponse | PaymentListResponse | null>(null)
+  const [data, setData] = useState<OverviewResponse | InvoiceSummaryListResponse | PaymentListResponse | null>(null)
   const role = session.user.role
   const isPermitted = isPagePermittedForRole(page, role)
   const [busy, setBusy] = useState(isPermitted)
   const [error, setError] = useState<unknown>(null)
   const [invoiceId, setInvoiceId] = useState<string | null>(null)
+  const activeInvoiceId = selectedInvoiceId ?? invoiceId
 
   useEffect(() => {
     if (!isPermitted) return
@@ -109,7 +116,7 @@ function Records({ session, page, onExpired }: RecordsProps) {
 
     const request = page === 'Overview'
       ? api.get<OverviewResponse>(role === 'customer' ? '/portal/overview' : '/reports/overview', range, controller.signal)
-      : api.get<SubscriptionSummaryListResponse | InvoiceSummaryListResponse | PaymentListResponse>(
+      : api.get<InvoiceSummaryListResponse | PaymentListResponse>(
           `/${page.toLowerCase()}`,
           { page: pageNumber, page_size: 20 },
           controller.signal
@@ -158,9 +165,6 @@ function Records({ session, page, onExpired }: RecordsProps) {
             {page === 'Overview' && (role === 'customer'
               ? 'Your account billing summary and payment metrics.'
               : 'Organization-wide subscription revenue, collection, and outstanding metrics.')}
-            {page === 'Subscriptions' && (role === 'customer'
-              ? 'Your active and historical subscriptions.'
-              : 'Customer subscriptions and contract lifecycle.')}
             {page === 'Invoices' && (role === 'customer'
               ? 'Your invoices and billing statements.'
               : 'Customer billing invoices and payment tracking.')}
@@ -236,13 +240,12 @@ function Records({ session, page, onExpired }: RecordsProps) {
       )}
 
       {data && page === 'Overview' && <OverviewView result={data as OverviewResponse} />}
-      {data && page === 'Subscriptions' && <SubscriptionsView result={data as SubscriptionSummaryListResponse} />}
-      {invoiceId && (
+      {activeInvoiceId && (
         <InvoiceDetails
-          key={invoiceId}
-          id={invoiceId}
+          key={activeInvoiceId}
+          id={activeInvoiceId}
           userId={session.user.id}
-          onClose={() => setInvoiceId(null)}
+          onClose={() => { setInvoiceId(null); onClearInvoiceId() }}
           onChanged={() => {
             startLoading()
             setRevision(v => v + 1)
@@ -344,79 +347,6 @@ function OverviewView({ result: { data } }: { result: OverviewResponse }) {
         </table>
       </div>
     </>
-  )
-}
-
-function SubscriptionsView({ result }: { result: SubscriptionSummaryListResponse }) {
-  if (!result.data.length) {
-    return (
-      <div className="empty-state">
-        <p>No subscriptions found for your account.</p>
-      </div>
-    )
-  }
-
-  const getCapabilitiesList = (sub: SubscriptionSummary) => {
-    const caps: string[] = []
-    if (sub.capabilities.can_edit) caps.push('Edit')
-    if (sub.capabilities.can_quote) caps.push('Quote')
-    if (sub.capabilities.can_confirm) caps.push('Confirm')
-    if (sub.capabilities.can_activate) caps.push('Activate')
-    if (sub.capabilities.can_pause) caps.push('Pause')
-    if (sub.capabilities.can_resume) caps.push('Resume')
-    if (sub.capabilities.can_renew) caps.push('Renew')
-    if (sub.capabilities.can_close) caps.push('Close')
-    if (sub.capabilities.can_change_addons) caps.push('Addons')
-    return caps
-  }
-
-  return (
-    <div className="panel table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Subscription #</th>
-            <th>Customer</th>
-            <th>Plan</th>
-            <th>Status</th>
-            <th>Next billing</th>
-            <th>Estimated total</th>
-            <th>Permitted actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.data.map(row => {
-            const caps = getCapabilitiesList(row)
-            return (
-              <tr key={row.id}>
-                <td className="font-semibold">{row.number}</td>
-                <td>{row.customer_name}</td>
-                <td>{row.plan_name}</td>
-                <td>
-                  <span className={`status-badge ${row.status.toLowerCase()}`}>
-                    {row.status}
-                    {row.is_paused ? ' · Paused' : ''}
-                  </span>
-                </td>
-                <td>{row.next_billing_date ?? '—'}</td>
-                <td className="font-semibold">{money(row.estimated_total)}</td>
-                <td>
-                  {caps.length > 0 ? (
-                    <div className="capabilities-tags">
-                      {caps.map(c => (
-                        <span key={c} className="cap-tag allowed">{c}</span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="cap-tag readonly">Read-only</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
   )
 }
 
@@ -554,6 +484,7 @@ export default function LiveWorkspace() {
   const [restoring, setRestoring] = useState(true)
   const [revision, setRevision] = useState(0)
   const [page, setPage] = useState<LivePage>('Overview')
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [signingOut, setSigningOut] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -570,6 +501,7 @@ export default function LiveWorkspace() {
 
   const expire = useCallback(() => {
     setSession(null)
+    setSelectedInvoiceId(null)
     setError(new ApiError(401, 'UNAUTHENTICATED', 'Your session expired. Please sign in again.'))
   }, [])
 
@@ -595,6 +527,7 @@ export default function LiveWorkspace() {
     setError(null)
     try {
       await api.logout()
+      setSelectedInvoiceId(null)
       setSession(null)
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 401) setSession(null)
@@ -609,6 +542,7 @@ export default function LiveWorkspace() {
   const activePage: LivePage = isPagePermittedForRole(page, userRole) ? page : 'Overview'
 
   const selectPage = (newPage: LivePage) => {
+    if (newPage !== 'Invoices') setSelectedInvoiceId(null)
     if (isPagePermittedForRole(newPage, userRole)) {
       setPage(newPage)
     } else {
@@ -644,6 +578,7 @@ export default function LiveWorkspace() {
           <AuthView
             resetToken={resetToken}
             onSession={newSession => {
+              setSelectedInvoiceId(null)
               setError(null)
               setSession(newSession)
               setPage('Overview')
@@ -782,13 +717,28 @@ export default function LiveWorkspace() {
         <div className="page-content live-page-content">
           {error !== null && <FormAlert error={error} />}
 
-          {activePage === 'Staff' && user.role === 'admin' ? (
+          {activePage === 'Subscriptions' ? (
+            <SubscriptionsManagement key={user.id} session={session}
+              onSelectInvoice={id => { setSelectedInvoiceId(id); selectPage('Invoices') }} onExpired={expire} />
+          ) : activePage === 'Products' ? (
+            <ProductsManagement onExpired={expire} />
+          ) : activePage === 'Plans' ? (
+            <PlansManagement onExpired={expire} />
+          ) : activePage === 'Taxes' ? (
+            <TaxesManagement onExpired={expire} />
+          ) : activePage === 'Discounts' ? (
+            <DiscountsManagement onExpired={expire} />
+          ) : activePage === 'Templates' ? (
+            <TemplatesManagement onExpired={expire} />
+          ) : activePage === 'Staff' ? (
             <StaffManagement onExpired={expire} />
           ) : (
             <Records
               key={`${user.id}-${activePage}`}
               session={session}
               page={activePage}
+              selectedInvoiceId={selectedInvoiceId}
+              onClearInvoiceId={() => setSelectedInvoiceId(null)}
               onExpired={expire}
             />
           )}
