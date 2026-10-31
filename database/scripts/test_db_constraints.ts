@@ -301,3 +301,4 @@ runConstraintTests()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

@@ -91,3 +91,4 @@ npm run test:db
 5. **Billing-Period Uniqueness:** `UNIQUE (subscription_id, period_start)` with `period_end > period_start` prevents overlapping or duplicate period generation.
 6. **Payment Idempotency:** `payments.idempotency_key` is unique; duplicate submissions are rejected or return the existing record.
 7. **Discount Usage Protection:** `UNIQUE (discount_rule_id, invoice_id)` on `discount_redemptions` prevents a discount rule from being consumed multiple times on the same invoice.
+

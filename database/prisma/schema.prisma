@@ -645,3 +645,4 @@ model InvoiceEmailOutbox {
 
   @@map("invoice_email_outbox")
 }
+

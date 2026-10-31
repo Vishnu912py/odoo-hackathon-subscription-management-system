@@ -136,3 +136,4 @@ CREATE INDEX "idx_subscription_events_timeline" ON "subscription_events" ("subsc
 
 -- Session expiry cleanup index
 CREATE INDEX "idx_sessions_user_expires" ON "sessions" ("user_id", "expires_at");
+
