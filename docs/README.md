@@ -1,12 +1,14 @@
 # Documentation README
 
-This directory is reserved for extended project documentation.
+Shared context for the three contributors and coding assistants. Read alongside the root README.
 
-## Suggested structure
+## Documentation map
 
-- `architecture.md`: system/module architecture and design decisions.
-- `api.md`: integration endpoints and payload contracts.
-- `workflows.md`: subscription lifecycle and business process flows.
-- `testing.md`: testing strategy and execution guidance.
+- [Requirements](requirements.md): source scope and acceptance criteria.
+- [Team responsibilities](team-responsibilities.md): named owners, handoffs and completion criteria.
+- [Architecture and contracts](architecture.md): proposed entities, integration boundaries and unresolved decisions.
+- [Roadmap](../plan.md): implementation order and demo checklist.
+- [Contributor guide](../contributing.md): branches, reviews and validation.
+- [Agent context](../agents.md): project instructions for coding assistants.
 
-Create these files as implementation details are finalized to keep docs accurate and maintainable.
+These are planning documents, not evidence of implemented features. Add concrete API/model contracts and verified setup instructions when the scaffold exists. Keep source requirements separate from team decisions.
