@@ -10,6 +10,12 @@ test('safe development defaults work without database credentials', () => {
   assert.equal(config.frontendOrigin, 'http://localhost:5173');
 });
 
+test('production requires HTTPS and mail configuration is all-or-nothing', () => {
+  assert.throws(() => loadConfig({ NODE_ENV: 'production' }), /HTTPS/);
+  assert.throws(() => loadConfig({ GMAIL_CLIENT_ID: 'partial' }), /all Gmail/);
+  assert.equal(loadConfig({ NODE_ENV: 'production', FRONTEND_ORIGIN: 'https://brightloop.example' }).frontendOrigin, 'https://brightloop.example');
+});
+
 test('invalid ports are rejected rather than silently truncated', () => {
   for (const port of ['0', '65536', '3000.5', '3000junk', '']) {
     assert.throws(() => loadConfig({ PORT: port }), /PORT/);

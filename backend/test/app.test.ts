@@ -64,7 +64,7 @@ test('malformed JSON, oversized bodies and unsupported media fail explicitly', a
   assert.equal(media.body.error.code, 'UNSUPPORTED_MEDIA_TYPE');
 });
 
-test('all contracted operations are explicit 501 placeholders, never mock successes', async () => {
+test('without a database implemented operations fail closed and pending operations remain explicit 501', async () => {
   const app = makeApp();
   const contract = loadContract();
   let checked = 0;
@@ -73,6 +73,13 @@ test('all contracted operations are explicit 501 placeholders, never mock succes
       const operation = methods[method];
       if (!operation) continue;
       const url = '/api/v1'+path.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-000000000001');
+      const { implemented } = await import('../src/modules/prototype.js');
+      if (implemented.has(`${method} ${path}`)) {
+        const unavailable = await request(app)[method](url).expect(503);
+        assert.equal(unavailable.body.error.code, 'DATABASE_UNAVAILABLE');
+        checked++;
+        continue;
+      }
       const response = await request(app)[method](url).expect(501);
       assert.equal(response.body.error.code, 'NOT_IMPLEMENTED');
       assert.match(response.body.error.message, new RegExp(operation.operationId));
@@ -117,7 +124,7 @@ test('request logging excludes query tokens and credentials', async () => {
   });
   await request(app).post('/api/v1/auth/reset-password?token=do-not-log')
     .set('Cookie', 'brightloop_session=do-not-log')
-    .send({ password: 'do-not-log' }).expect(501);
+    .send({ password: 'do-not-log' }).expect(503);
   assert.equal(logs.length, 1);
   assert.equal(logs[0]?.path, '/api/v1/auth/reset-password');
   assert(!JSON.stringify(logs).includes('do-not-log'));

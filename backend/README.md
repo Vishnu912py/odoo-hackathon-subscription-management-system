@@ -1,6 +1,6 @@
 # Brightloop backend
 
-Express + TypeScript server foundation with PostgreSQL through Prisma ORM and Prisma Migrate. This package is independent of the future frontend package.
+Express + TypeScript server foundation with PostgreSQL through Prisma ORM and Prisma Migrate. The frontend connects through the Vite development proxy. See [prototype v1](../docs/prototype-v1.md) for integrated setup.
 
 ## Implemented now
 
@@ -10,7 +10,7 @@ Express + TypeScript server foundation with PostgreSQL through Prisma ORM and Pr
 - `GET /api/v1/openapi.json`: shared contract in development/test; disabled in production.
 - Exact-origin credentialed CORS, security headers, bounded JSON parsing, request IDs and sanitized error envelopes.
 - Graceful SIGINT/SIGTERM shutdown and tests for foundation behavior.
-- Module routing aligned to all 68 shared contract operations. **Each business operation currently returns HTTP 501 `NOT_IMPLEMENTED`.** There is no authentication, CRUD, billing, payment processing or background worker yet, and no fake successful responses.
+- Prototype v1 implements 20 auth/staff/read/report/payment operations. Other contract operations return 501; no recurring billing worker or payment gateway exists. See the prototype endpoint inventory.
 - Domain schema, reviewed PostgreSQL migrations, idempotent synthetic seeds and constraint integration tests implemented in `backend/prisma` and `backend/scripts` by Zenfox-690.
 
 ## Local setup
@@ -61,11 +61,11 @@ backend/
       reporting/            Staff reports and owned customer summaries
     generated/prisma/       Generated Prisma 7 client, ignored by Git
   prisma/
-    schema.prisma           Shared schema source (32 domain models)
+    schema.prisma           Shared schema source (32 domain models plus two authentication infrastructure models)
     migrations/             Committed baseline and custom SQL migrations
       20261031110000_init/              Base table definitions & relations
       20261031110001_constraints.../    PostgreSQL CHECKs & functional indexes
-    seed.ts                 100% idempotent synthetic test seed fixtures
+    seed.ts                 Synthetic fixtures; repeated runs preserve existing rows
   scripts/
     test_db_constraints.ts  Live PostgreSQL constraint & concurrency test suite
     verify_schema_integrity.py Static schema, DDL & ER integrity verifier
@@ -85,7 +85,8 @@ npm run typecheck
 
 # 2. Live Database Operations (Requires running PostgreSQL)
 npm run db:deploy        # Apply committed migrations
-npm run prisma:seed      # Seed synthetic fixtures (idempotent, repeatable)
+$env:ALLOW_DEV_SEED='true'
+npm run prisma:seed      # Development only; preserves existing records
 npm run test:db          # Run live PostgreSQL constraint test suite
 ```
 
@@ -108,11 +109,15 @@ npm run build
 npm start
 ```
 
-`check` validates/generates Prisma, checks TypeScript, runs tests and compiles.
+`check` validates/generates Prisma, checks TypeScript, runs foundation tests and compiles. Run `npm run test:integration` separately for real PostgreSQL HTTP tests in a temporary isolated schema.
 
 ## Next implementation steps
 
 1. Zenfox: domain schema/migrations and fixtures are implemented, including tables for sessions, idempotency and outbox. Transactional persistence operations, reporting queries, concurrency/recovery tests and performance validation remain pending (D3-D5).
-2. Vishnu: session auth + CSRF + role/ownership enforcement; registration/login/reset; then one complete subscription path.
+2. Vishnu: complete password reset/staff setup and the create/quote/activate/bill path. Auth, CSRF, ownership and payments are implemented in prototype v1.
 3. Albin: shell/forms against contracts, then replace mocks when each backend handler exists.
 4. Add real-database integration tests for ownership, migrations, billing concurrency and payment replay before merging those features.
+
+## Authentication and hosting
+
+See [V1 authentication and Vercel handoff](../docs/authentication-v1.md). Apply the additive authentication migration before running this version. Missing Gmail configuration fails reset/invite operations with 503; ordinary sign-in remains available. `npm run mail:deliver` retries queued mail; `npm run admin:create` is an explicit one-time operator command, never a build or seed step.

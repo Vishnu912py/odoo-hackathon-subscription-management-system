@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import LiveWorkspace from './features/live/LiveWorkspace'
 import './App.css'
 
 const navigation = [
@@ -126,7 +127,7 @@ const recoveryItems = [
   },
 ]
 
-function App() {
+function DemoDashboard() {
   const [activePage, setActivePage] = useState('Overview')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -486,4 +487,13 @@ function App() {
   )
 }
 
-export default App
+export default function App() {
+  const [preview, setPreview] = useState(false)
+  return <>
+    <div className="connection-mode">
+      <strong>{preview ? 'Design preview · illustrative data only' : 'Live backend workspace'}</strong>
+      <button onClick={() => setPreview(value => !value)}>{preview ? 'Open live workspace' : 'View Albin’s design preview'}</button>
+    </div>
+    {preview ? <div className="demo-preview"><DemoDashboard /></div> : <LiveWorkspace />}
+  </>
+}

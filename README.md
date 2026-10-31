@@ -2,22 +2,30 @@
 
 Build a unified platform for Brightloop Software to manage products, recurring plans, quotations, subscriptions, invoices, discounts, payments, and reporting.
 
-## Implementation checklist — 31 October 2026
+## Prototype v1
 
-Checked items are implemented deliverables, not proof that the full business journey works. PR #6 (backend foundation) and PR #4 (database foundation) are merged in `main` at `998c6a8`. Business/authentication endpoints still return `501 NOT_IMPLEMENTED`.
+The `feat/prototype-v1` branch combines Albin's frontend, Zenfox's Prisma 7 database foundation, and working handlers for registration, login/logout, owned subscription/invoice/payment reads, reports and staff payment recording. See [prototype setup and demo](docs/prototype-v1.md).
+
+Reset/setup email, admin staff management and session hardening are implemented; see the [authentication and Vercel setup checklist](docs/authentication-v1.md). Gmail credentials and hosted deployment remain to be configured. Catalog editing, subscription lifecycle actions, recurring billing, discounts and invoice delivery/printing remain follow-ups. This is an integrated first prototype, not completion of R01–R12.
+
+## Foundation checklist — 31 October 2026
+
+Checked items below record the earlier foundation deliverables. PR #6 and PR #4 are merged in `main` at `998c6a8`. The prototype branch now implements 20 operations; the other contract endpoints still return `501 NOT_IMPLEMENTED`. Its newer scope and validation are recorded in the prototype guide above.
 
 ### Vishnu (`Vishnu912py`) — backend and integration
 
 - [x] Confirm stack, shared API contracts, role matrix and MVP billing defaults.
 - [x] Implement Express/TypeScript foundation, environment validation, Prisma connection pool, health endpoints, error handling and HTTP/configuration tests (PR #6).
 - [x] Integrate PR #4 locally, configure a dedicated local PostgreSQL database, apply both migrations and verify real backend connectivity.
-- [ ] V1 remainder: select deployment target and configure deployment.
-- [ ] V2: implement authentication, password reset, staff creation, CSRF, server roles and customer ownership.
+- [x] V1 deployment setup: Vercel selected; frontend/API configuration and operator guide added.
+- [ ] V1 release: configure hosted PostgreSQL/Gmail OAuth and verify the deployed application.
+- [x] V2 implementation: authentication, password reset, staff invitations, CSRF, server roles and customer ownership.
+- [ ] V2 external verification: real reset/setup email delivery and browser journey.
 - [ ] V3: implement catalog APIs and subscription lifecycle/business rules.
 - [ ] V4: implement billing orchestration, tax/discount calculations, invoice actions and payment rules.
 - [ ] V5: expose reports, complete the real end-to-end journey, validate performance and prepare release/demo.
 
-Local frontend integration code also exists in the working tree: API client/types, development proxy, connection indicators, sign-in wiring and read-only report/list views. It is **uncommitted** and is not counted as merged or verified end-to-end functionality.
+Frontend integration, registration/sign-in, invoice details and payment entry are included in the prototype branch. PostgreSQL-backed HTTP integration tests exercise the workflow; browser visual verification remains blocked by the browser permission gate.
 
 ### Zenfox (`Zenfox-690`) — database and persistence
 
@@ -34,7 +42,7 @@ Session, idempotency, billing-run and outbox tables exist; their runtime workflo
 
 - [x] Scaffold the React/Vite/TypeScript application.
 - [x] Build the RevOps Shield dashboard prototype: navigation shell/mobile menu, summary cards, illustrative chart, invoice table and recovery overview (commit `50524a8`).
-- [ ] F1 remainder: complete role-aware navigation, shared forms/states and signup/login/reset flows against working authentication.
+- [x] F1 authentication: role-aware navigation and signup/login/reset/setup flows connected to the API. Browser verification remains pending.
 - [ ] F2: implement admin catalog, variants, plans, taxes, discounts, staff and quotation-template screens.
 - [ ] F3: implement subscription detail/forms, lifecycle actions and the ownership-scoped customer portal.
 - [ ] F4: implement invoice detail/print and payment-entry workflows with authoritative balances.

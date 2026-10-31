@@ -2,9 +2,11 @@
 
 ## Goal
 
-Build the Brightloop subscription platform described in `docs/requirements.md`. Status: backend and database foundations are implemented, alongside a React dashboard prototype. Domain schema, migrations and synthetic fixtures are in `backend/prisma`; business endpoints still return 501 and the first integrated journey is incomplete. React/TypeScript, Express/TypeScript, PostgreSQL and Prisma ORM/Migrate form the baseline. Backend uses Node.js 24/Prisma 7 in `backend/`. Hosting remains open. See the dated [implementation checklist](README.md#implementation-checklist--31-october-2026) for completed deliverables and local-only work. Use `docs/api-contracts.md` for shared interfaces and confirmed MVP defaults. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
+Build the Brightloop subscription platform described in `docs/requirements.md`. Status: backend and database foundations are implemented, alongside a React dashboard prototype. Domain schema, migrations and synthetic fixtures are in `backend/prisma`; prototype v1 implements auth, owned reads, reports and transactional payment recording. The full subscription-create/activate/bill journey remains incomplete. React/TypeScript, Express/TypeScript, PostgreSQL and Prisma ORM/Migrate form the baseline. Backend uses Node.js 24/Prisma 7 in `backend/`. Vercel is selected; deployment configuration is present and hosted database/Gmail setup remains pending. See the dated [implementation checklist](README.md#foundation-checklist--31-october-2026) for completed deliverables and local-only work. Use `docs/api-contracts.md` for shared interfaces and confirmed MVP defaults. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
 
 ## Milestones
+
+Prototype v1 delivers a smaller integrated slice: registration/login, owned subscription/invoice/payment views, reports and transactional payment recording. See [prototype scope and verification](docs/prototype-v1.md). Milestone 2 still requires subscription authoring/lifecycle and recurring invoice generation.
 
 1. **Foundation:** Vishnu confirms stack, role matrix and contracts; Zenfox designs schema/fixtures; albinsavi123-lang builds navigation and screen prototypes. Exit: shared runnable scaffold and consistent field/status definitions.
 2. **First integrated journey:** Signup/login, one product/monthly plan, quotation, activation, invoice and payment. Exit: real backend journey works and customers see only owned records. This is not full statement completion.
@@ -27,3 +29,7 @@ Build the Brightloop subscription platform described in `docs/requirements.md`. 
 Admin configures product/variant, plan, tax and discount -> staff uses quotation template -> subscription activates -> automatic invoice -> rerun proves no duplicate -> staff records payment -> customer sees owned records -> dashboard shows reconciled totals. Show one permission rejection and one plan-policy restriction.
 
 Upgrades/downgrades and live gateways are optional extensions, not substitutes for unfinished required scope.
+
+## V1 authentication increment
+
+Implementation checklist and deployment gates are tracked in [docs/authentication-v1.md](docs/authentication-v1.md). Local implementation does not check off real-mail delivery or deployed browser acceptance.

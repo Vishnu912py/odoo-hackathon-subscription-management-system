@@ -7,10 +7,15 @@ import type { Database } from './db/client.js';
 import { errorHandler, HttpError, notFound } from './http/errors.js';
 import { requestContext, requestLogger, type RequestLog } from './http/request-context.js';
 import { createApiRouter } from './modules/index.js';
+import { prototypeRouter } from './modules/prototype.js';
+import { timingSafeEqual } from 'node:crypto';
+import { deliverMail, type MailTransport } from './modules/accounts/mail.js';
 
 export interface AppDependencies {
   database: Database;
   logRequest?: (entry: RequestLog) => void;
+  now?: () => Date;
+  mailTransport?: MailTransport;
 }
 
 export function createApp(config: Config, dependencies: AppDependencies) {
@@ -33,6 +38,17 @@ export function createApp(config: Config, dependencies: AppDependencies) {
     exposedHeaders: ['X-Request-Id'],
   }));
   app.use(express.json({ limit: '100kb', strict: true }));
+  app.get('/api/internal/auth-maintenance', async (req, res) => {
+    const expected = `Bearer ${config.cronSecret ?? ''}`, supplied = req.get('authorization') ?? '';
+    if (!config.cronSecret || Buffer.byteLength(expected) !== Buffer.byteLength(supplied) || !timingSafeEqual(Buffer.from(expected), Buffer.from(supplied))) throw new HttpError(401, 'UNAUTHENTICATED', 'Invalid maintenance credential.');
+    const prisma = dependencies.database.prisma;
+    if (!prisma) throw new HttpError(503, 'DATABASE_UNAVAILABLE', 'Database unavailable.');
+    await deliverMail(prisma, config, dependencies.mailTransport);
+    await prisma.session.deleteMany({ where: { OR: [{ expiresAt: { lte: new Date() } }, { createdAt: { lte: new Date(Date.now() - 7 * 86_400_000) } }] } });
+    await prisma.authRateLimit.deleteMany({ where: { expiresAt: { lte: new Date() } } });
+    await prisma.authEmailJob.deleteMany({ where: { expiresAt: { lte: new Date(Date.now() - 86_400_000) } } });
+    res.json({ data: { message: 'Authentication maintenance completed.' } });
+  });
 
   app.get('/health/live', (_req, res) => {
     res.json({ data: { status: 'ok', service: 'brightloop-backend' } });
@@ -53,7 +69,7 @@ export function createApp(config: Config, dependencies: AppDependencies) {
       return;
     }
     next();
-  }, createApiRouter(contract));
+  }, prototypeRouter(dependencies.database.prisma, config, dependencies.now, dependencies.mailTransport), createApiRouter(contract));
   app.use(notFound);
   app.use(errorHandler);
   return app;
