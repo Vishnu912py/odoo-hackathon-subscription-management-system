@@ -1,167 +1,236 @@
-# Odoo Hackathon Subscription Management System
+# RevOps Shield
 
-Build a unified platform for Brightloop Software to manage products, recurring plans, quotations, subscriptions, invoices, discounts, payments, and reporting.
+### From quotation to recurring revenue—one connected workspace.
 
-## Implementation status
+**Built for Brightloop Software's subscription management challenge.** RevOps Shield brings product configuration, subscription lifecycles, recurring invoices, payments and customer visibility into one application. Admins configure the business, staff run daily operations, and customers see their own billing records.
 
-The current checkout integrates React/TypeScript, Express/TypeScript, PostgreSQL and Prisma 7 into a runnable subscription product. All **75 contract operations** have handlers, including catalog, lifecycle, scheduled billing, invoice actions/PDF/email, payments and reporting. Run **`npm run dev` from the repository root** after database/dependency setup to start the API, UI and billing worker together.
+[![Database Integrity & PostgreSQL CI](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/actions/workflows/database-ci.yml/badge.svg?branch=main)](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/actions/workflows/database-ci.yml)
 
-See [integrated product setup and verification](docs/integrated-product.md) for the complete workflow, fresh checks, local browser/performance evidence and hosted acceptance evidence and operational limits. Hosted deployment and live invitation, invoice and reset email delivery are verified. The dated team checklist below is historical and does not supersede the current integration guide.
+**[Open the live app](https://brightloop-subscriptions-alpha.vercel.app)** · **[Five-minute demo](#five-minute-demo)** · **[Run locally](#run-locally)** · **[Verification](#tested-beyond-the-happy-path)** · **[API contract](docs/api/openapi.json)**
 
-<a id="foundation-checklist--31-october-2026"></a>
-
-## Team implementation checklist — 31 October 2026
-
-Reviewed against `main` at `8a8536e`, `feat/prototype-v1` at `de91775`, and the D5 branch at `e834a3a`. Checked items record completed implementation; branch-only work is explicitly marked. Shared integration work is credited separately from each collaborator's authored deliverables.
-
-| Location | Available work |
+| Delivered | Evidence |
 | --- | --- |
-| `main` | Backend/database foundations, V1 authentication/integration, Albin's F1 auth UI, Zenfox's D3 persistence and D4 reporting |
-| `feat/prototype-v1` | Also contains Albin's F2 catalog and F3 subscription screens from [PR #13](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/13); this newer frontend increment is not yet merged into `main` |
-| `feat/db-benchmark` | D5 dataset generator and reporting benchmark tooling; not yet merged into `main` or accepted as page-performance evidence |
+| **75 implemented API operations** | Shared OpenAPI contract, generated frontend types and real authenticated persistence |
+| **3 distinct roles** | Administrator, staff and customer; ownership enforced on the server |
+| **Complete quotation-to-payment journey** | Verified locally and against hosted Supabase data |
+| **Scheduled billing and real email** | Hosted maintenance verified; invitation, invoice and reset messages confirmed in the authorized inbox |
+| **5,000+ records in browser testing** | Desktop/mobile acceptance, pagination and measured page navigation |
 
-### Vishnu (`Vishnu912py`) — backend, integration and release
+## The problem we solve
 
-- [x] Confirm the stack, role matrix and billing defaults; prepare requirements, team responsibilities, ER/UI handoffs and shared OpenAPI contracts.
-- [x] V1: implement the Express/TypeScript foundation, configuration, Prisma connection pool, health endpoints, CORS/security headers, validation, error envelopes and graceful shutdown ([PR #6](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/6)).
-- [x] Integrate the frontend and database into an authenticated prototype with real persisted responses, local PostgreSQL setup and repeatable development fixtures.
-- [x] V2: implement signup/login/logout, session restoration, password policy, server-side role checks and customer ownership enforcement.
-- [x] V2: implement hashed opaque sessions, cookie/CSRF protection, shared PostgreSQL rate limits, idle/absolute expiry and session revocation.
-- [x] V2: implement single-use password reset, admin staff invitations and account management, version checks and idempotent staff mutations.
-- [x] V2: implement Gmail API transport, encrypted authentication-email queue, delivery leases/retries and maintenance; add the supporting authentication migration.
-- [x] Configure Gmail locally and test the real reset endpoint: account creation returned 201, reset request returned 202, and Gmail accepted the email on the first delivery attempt. Inbox arrival and completing the link remain separate checks.
-- [x] Implement paginated owned record reads, invoice details/payment history, staff/admin payment recording, exact balances, overpayment rejection and concurrency-safe idempotent replay.
-- [x] Implement overview/portal HTTP routes and integrate Zenfox's D4 reporting persistence into those routes.
-- [x] Prepare Vercel frontend/API deployment configuration, serverless entrypoint, environment guide and one-time admin bootstrap command.
-- [x] Resolve PR #13's workspace conflicts while preserving Albin's F1 authentication layout, F2/F3 screens, role restrictions and subscription-to-invoice navigation.
-- [ ] V3: implement catalog HTTP APIs, subscription authoring/transitions, plan policies, add-ons and renewal orchestration.
-- [ ] V4: connect D3 persistence to authorized billing HTTP operations and a scheduler; complete invoice confirm/cancel/send/print and full tax/discount workflows.
-- [ ] V1/V5 release: configure hosted PostgreSQL and Vercel secrets, deploy, verify HTTPS/browser flows and demonstrate the full create/quote/activate/bill/pay journey.
+Recurring revenue requires more than generating an invoice. A plan changes, a customer pauses, an invoice needs a retry, a payment arrives in parts—and the numbers still need to agree.
 
-### Zenfox (`Zenfox-690`) — database and persistence
+RevOps Shield connects those events through persisted subscription history, explicit lifecycle rules and transactional billing. Staff can trace an invoice back to its subscription, customers get an ownership-scoped portal, and the dashboard reflects recorded invoices and payments.
 
-- [x] D1: design the domain model, relationships, constraints, indexes and synthetic fixtures; refine the ER/schema handoff.
-- [x] D2: implement the shared Prisma 7 schema, baseline SQL migrations, seed tooling, schema verification, live constraint tests and PostgreSQL CI ([PR #4](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/4)).
-- [x] D3: implement transactional invoice persistence, historical customer/line/tax snapshots, exact decimal calculations and subscription-period concurrency protection.
-- [x] D3: implement discount eligibility/history and usage-limit protection, idempotent payment allocation, recoverable billing runs, pause handling and monotonic schedule safeguards; add regression/concurrency coverage ([PR #9](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/9)).
-- [x] Document persistence interfaces and integration responsibilities in the [database persistence handoff](docs/database-persistence-handoff.md).
-- [x] D4: implement database-side filtered reporting aggregation, repeatable-read snapshots, actor-derived customer scoping, monthly buckets and exact totals; integrate fixture reconciliation and cleanup tests ([PR #10](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/10), [reporting handoff](docs/reporting-persistence-handoff.md)).
-- [x] D5 tooling on `feat/db-benchmark`: add a deterministic large-dataset generator, reporting benchmark script and benchmark workflow (`e834a3a`).
-- [ ] D5 acceptance: review/merge benchmark tooling, record measured results, tune indexes as needed and support the under-two-second page target with representative data.
+## Five-minute demo
 
-D3 persistence is implemented, but the complete scheduled billing/API journey still requires Vishnu's integration work. The existing payment HTTP handler remains distinct from the D3 payment persistence module. Authentication email delivery is implemented; invoice email delivery is still pending.
+Open the **[hosted application](https://brightloop-subscriptions-alpha.vercel.app)**. For the administrator/staff walkthrough, use credentials provided by the presenting team. Public signup creates a customer account with its own empty profile; existing billing records are accessed through a verified customer invitation. Hosted administrator credentials are not published in this repository. A complete local demo with synthetic accounts is available below.
 
-### Albin (`albinsavi123-lang`) — frontend and user experience
+| Step | What to show | What it demonstrates |
+| --- | --- | --- |
+| **1. Configure** | Create a product, tax and recurring plan; optionally add a variant or discount | A configurable catalog and explicit pricing rules |
+| **2. Subscribe** | Create a customer and draft subscription; edit its lines, then quote, confirm and activate | A connected workflow with versioned writes and plan-policy checks |
+| **3. Bill** | Select **Generate due invoices**, or let the scheduler process the due period | Persisted billing, tax/discount calculation and invoice snapshots |
+| **4. Settle** | Confirm the invoice, download its PDF, then record a partial or full payment | Correct outstanding balance and paid status, without a real card charge |
+| **5. Verify** | Open Overview, inspect billing history, and view the customer's portal | Reconciled reporting, operational traceability and role-based access |
 
-- [x] Scaffold React/Vite/TypeScript and build the RevOps Shield design preview, including responsive navigation, dashboard cards, illustrative chart and invoice/recovery views (`50524a8`).
-- [x] F1: complete the authenticated workspace layout, role-aware sidebar/mobile navigation, signup/login/reset/setup forms, password validation and shared feedback states ([PR #11](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/11), merged into `main`).
-- [x] F1: refine staff management and invoice/payment presentation on top of the shared API client and integrated authentication/payment flows.
-- [x] F2: implement admin product/variant, plan, tax, discount and quotation-template screens, exact decimal validation and API error handling ([PR #13](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/13), merged into `feat/prototype-v1` only).
-- [x] F3: implement subscription list/filtering, creation/detail screens, capability-driven lifecycle actions and navigation to invoice details (`7fa16d4`, included in PR #13 on `feat/prototype-v1`).
-- [x] Add F1/F2/F3 tests for password/role rules, catalog validation, request contracts, version/idempotency headers and explicit handling of unimplemented backend endpoints.
-- [ ] Bring the newer F2/F3 frontend increment from `feat/prototype-v1` into `main` after integration review.
-- [ ] F2/F3 acceptance: verify catalog writes and the full subscription lifecycle against implemented backend operations; screens currently encounter 501 for pending operations.
-- [ ] F4: finish invoice actions and printable views; preserve the existing integrated invoice detail/payment-entry flows.
-- [ ] F5: verify rendered dashboard/portal journeys, mobile layouts, pagination and page performance with representative data.
+**Show the difficult case, too:** rerun billing for the same period to demonstrate duplicate protection, or attempt an overpayment to show that the server rejects it. A failed billing period remains recoverable after its underlying issue is repaired.
 
-Shared prototype integration already provides generated API types, cookie/CSRF handling, prepared mutations, exact money display, live overview data and recovery of uncertain payment requests. These are team integration deliverables, not claims that Albin authored every supporting backend/client component. The default workspace uses live API data; the separate design preview contains illustrative data.
-
-### Verification recorded
-
-These are recorded results from earlier implementation/test runs, not fresh code-test runs for this README-only update:
-
-- [x] V1 authentication backend checks: 17 tests, Prisma validation/generation, TypeScript checks and build passed.
-- [x] V1 PostgreSQL HTTP integration suite: 9 tests including the enclosing suite passed in an isolated schema, covering authentication, ownership, payments, recovery and mail retries with an injected transport.
-- [x] PR #13 conflict resolution: frontend `npm run check` passed 33 tests, generated-type checks, lint, TypeScript and Vite build; sidebar/catalog role guards were checked together.
-- [x] Local authentication migration applied without reseeding domain records; the real Gmail reset-send test subsequently succeeded at the provider-acceptance stage.
-- [x] Baseline schema integrity and live PostgreSQL constraint checks were recorded; D3/D4 add further concurrency/reporting test coverage in their merged implementations.
-- [x] Vercel configuration property validation passed; this is not a hosted build/deployment test.
-- [ ] Confirm reset email inbox arrival and complete the reset link in a browser.
-- [ ] Verify deployed HTTPS flows, full lifecycle/billing acceptance, scheduler recovery and the performance target.
-
-Browser verification was previously blocked by the browser permission gate. Health/readiness proves connectivity only. See the [final acceptance checklist](plan.md#final-acceptance-checklist) for the full project requirements.
-
-## Technology stack
-
-The confirmed technology stack is:
-- **Frontend:** React + Vite + TypeScript (`frontend/`)
-- **Backend:** Node.js 24 + Express 5 + TypeScript (`backend/`)
-- **Database:** PostgreSQL 16 + Prisma ORM 7.10.1 (`backend/prisma/`)
-- **Contracts:** OpenAPI 3.1 REST JSON (`docs/api/openapi.json`)
-
-## Directory structure
-
-```text
-├── frontend/               # React + Vite + TypeScript web application
-├── backend/                # Express 5 + TypeScript API foundation
-│   ├── prisma/             # Single authoritative schema.prisma, migrations & seed
-│   ├── src/                # App, server, config, modules & db client
-│   ├── test/               # HTTP, config & database integration tests
-│   └── prisma.config.ts    # Prisma 7 CLI configuration
-├── docs/                   # Specifications, ER diagrams, API contracts, and wireframes
-└── .github/workflows/      # Automated CI workflows (PostgreSQL 16 service integration)
+```mermaid
+flowchart LR
+    D[Draft] --> Q[Quotation] --> C[Confirmed] --> A[Active] --> X[Closed]
+    A --> B[Recurring billing]
+    B --> I[Draft invoice] --> F[Confirmed invoice] --> P[Paid]
+    P --> R[Reports and customer portal]
 ```
 
-## Backend setup and verification
+Pause, resume, renewal, add-ons and early closure follow the plan's policies and recurrence boundaries.
 
-Prerequisites: **Node.js 24.x**, npm, and PostgreSQL for database-backed work.
+## What you can do
 
-From repository root:
+| Area | Implemented capabilities |
+| --- | --- |
+| **Accounts and access** | Signup, login/logout, password reset, staff management, customer invitations, secure sessions and server-side role/ownership checks |
+| **Products and pricing** | Products, variants with price adjustments, add-ons, taxes, fixed/percentage discounts, date windows, thresholds and usage limits |
+| **Recurring plans** | Daily, weekly, monthly and yearly billing; minimum quantities; availability dates; pause, renewal and closure policies |
+| **Quotations and subscriptions** | Reusable templates, validity periods, draft editing, payment terms, lifecycle transitions and paginated event history |
+| **Billing and invoices** | Automatic due-period processing, run history and retry, invoice confirmation/cancellation, email delivery history and PDF download |
+| **Payments** | Partial/full receipts with method, date and note; exact balances, overpayment rejection and safe replay of repeated requests |
+| **Reporting and portal** | Overview metrics, date/plan filters, searchable paginated records, outstanding/overdue visibility and customer-owned views |
+| **Responsive experience** | Desktop and mobile navigation, focused action controls and expandable billing history |
 
-```bash
-cd backend
-npm ci
-npm run prisma:generate
-cp .env.example .env
+<details>
+<summary><strong>See the application: desktop invoice workspace</strong></summary>
+
+Actual browser-acceptance screenshot using synthetic, persisted test records. This is the functional application, not the separate design preview.
+
+![Desktop invoice workspace with recurring billing, filters, balances and invoice actions](docs/images/invoices-desktop.png)
+
+</details>
+
+<details>
+<summary><strong>See the application: mobile layout</strong></summary>
+
+<img src="docs/images/invoices-mobile.png" alt="Mobile invoice workspace with compact navigation, expandable billing history and filters" width="320">
+
+</details>
+
+## Engineering that protects the numbers
+
+- **One invoice per subscription period.** Database uniqueness, transactional persistence and idempotent requests protect against duplicate billing during retries and concurrent execution.
+- **Failure does not advance the billing cursor.** Failed periods stay recoverable. A run can finish with errors, and an administrator can retry after repair.
+- **Money stays exact.** PostgreSQL decimal types, decimal-string API fields and explicit rounding preserve financial precision. Concurrent payment requests cannot overpay the same invoice.
+- **History stays intact.** Invoices snapshot customer details, line prices, taxes and discounts. Later catalog changes do not rewrite past invoices; retries do not consume a discount twice.
+- **Authorization lives on the server.** Hiding a button is not the access boundary. Roles and customer ownership are checked for reads, mutations and PDF downloads.
+- **Email has a durable delivery trail.** Encrypted authentication outbox messages, delivery leases and retries support recovery. Invoice delivery is marked sent after provider acceptance.
+- **PDFs support Indian-script billing data.** Embedded Noto fonts cover Latin, Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada and Malayalam. A multilingual invoice was rendered and visually checked.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    U[Admin / Staff / Customer] --> UI[React + TypeScript / Vite]
+    UI --> API[Express 5 + TypeScript / Node.js 24]
+    API --> AUTH[Sessions / CSRF / Roles / Ownership]
+    API --> DOMAIN[Catalog / Lifecycle / Billing / Reports]
+    AUTH --> DB[(PostgreSQL / Prisma 7)]
+    DOMAIN --> DB
+    CRON[Supabase pg_cron / pg_net] -->|Authenticated maintenance| API
+    DOMAIN --> MAIL[Durable outbox / Gmail API]
+    DOMAIN --> PDF[PDFKit / Embedded Noto fonts]
 ```
 
-Edit `backend/.env` to point `DATABASE_URL` to your PostgreSQL database.
+| Layer | Implementation |
+| --- | --- |
+| Frontend | React, TypeScript, Vite; generated types from the shared contract |
+| Backend | Node.js 24, Express 5, TypeScript, OpenAPI 3.1 validation |
+| Persistence | PostgreSQL, Prisma ORM/Migrate 7.10.1, database constraints and transactions |
+| Hosting | Vercel frontend/API services; Supabase PostgreSQL in Mumbai |
+| Scheduling | Hosted billing maintenance every minute; local development worker every 30 seconds |
+| Delivery | Gmail API with OAuth, persistent outboxes and retries; PDFKit for invoice PDFs |
+| CI | GitHub Actions with PostgreSQL 16, migrations, repeatable seeding, constraint/integration tests and frontend checks |
+
+The browser never connects directly to the database. Hosted data lives in a private schema with a dedicated backend role, restricted API-role privileges and certificate-verified database connections. Maintenance endpoints require a bearer secret stored in Supabase Vault for the hosted schedule.
+
+## Tested beyond the happy path
+
+Recorded verification as of **31 October 2026**:
+
+| Check | Result |
+| --- | --- |
+| Backend validation | **17 tests passed**, plus Prisma validation/generation, TypeScript and compilation |
+| Frontend validation | **33 tests passed**, plus generated contract types, lint and production build |
+| Real PostgreSQL integration | **21 tests passed** in temporary isolated schemas, including enclosing tests |
+| Final V3 run with browser acceptance | **12 checks passed**, including desktop/mobile interaction and the 5,000-record workload |
+| OpenAPI validation | **75 operations, 111 schemas, 10 valid examples and 8 rejected invalid payloads** |
+| Hosted acceptance | Catalog → customer → quotation → activation → billing → confirmation → payment → PDF → report verified against persisted data |
+| Real delivery | Customer invitation, invoice and password-reset emails confirmed received; invitation acceptance and owned invoice access verified |
+
+The suites above overlap; their counts are not a total of unique tests. Coverage includes cross-customer access rejection, duplicate payment replay, concurrent overpayment attempts, discount usage protection, billing recovery, late activation, calendar recurrence and mobile navigation. Test records are synthetic; temporary integration schemas are removed after the tests.
+
+### Measured page navigation with thousands of records
+
+The latest UI-cleanup browser run contained **5,012 subscriptions and 5,010 invoices**, including copied line, tax and payment records. Five authenticated navigation measurements were taken per page:
+
+| Page | Observed range | Slowest sample |
+| --- | --- | --- |
+| Overview | 214–309 ms | **309 ms** |
+| Subscriptions | 150–172 ms | **172 ms** |
+| Invoices | 138–260 ms | **260 ms** |
+
+Measured from navigation click until loaded content rendered on Windows, AMD Ryzen AI 5 340, local PostgreSQL, Node.js 24, Vite and headless Edge, without CPU/network throttling. These samples meet the two-second target for the measured local pages; they are **not a hosted cold-start or concurrent-load benchmark**. No browser JavaScript errors were reported. See the [verification guide](docs/integrated-product.md) for methodology and repeat instructions.
+
+## Run locally
+
+**Prerequisites:** Node.js **24.x**, npm and a running PostgreSQL instance. Use a dedicated development database for the synthetic demo.
 
 ```bash
-# Verify schema & run test suite
-npm run check
+git clone https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system.git
+cd odoo-hackathon-subscription-management-system
+npm --prefix backend ci
+npm --prefix frontend ci
+```
 
-# Start development server
+Copy `backend/.env.example` to `backend/.env` without overwriting an existing configuration. Set `DATABASE_URL` to your development database and keep `FRONTEND_ORIGIN=http://localhost:5173`.
+
+```bash
+npm --prefix backend run db:deploy
+npm --prefix backend run prisma:generate
+```
+
+For a synthetic demo, set `ALLOW_DEV_SEED=true` in that development `.env`, then run:
+
+```bash
+npm --prefix backend run prisma:seed
 npm run dev
 ```
 
-Open `http://localhost:3000/health/live`. `/health/ready` verifies PostgreSQL connection readiness.
+Open **http://localhost:5173**. The root development command starts the frontend, API and billing worker together.
 
-## Team responsibilities
+<details>
+<summary><strong>Local demo accounts</strong> — disposable development database only</summary>
 
-| Owner | Responsibility | First deliverable |
-| --- | --- | --- |
-| Vishnu (`Vishnu912py`), team lead | Architecture, authentication/authorization, backend business rules, subscription lifecycle, billing orchestration, integration and release | Confirm stack/contracts and scaffold a working foundation |
-| `Zenfox-690`, database specialist | Data model, migrations, constraints, seed data, transactional billing persistence, reporting queries and indexes | Reviewed schema covering users through payments |
-| `albinsavi123-lang`, frontend specialist | Admin/staff interfaces, customer portal, forms, dashboards and UI integration | Shared shell and subscription workflow using agreed mock data |
+| Email | Role |
+| --- | --- |
+| `admin@brightloop.io` | Administrator |
+| `staff@brightloop.io` | Staff |
+| `billing@acmestudio.com` | Customer |
 
-See [team responsibilities](docs/team-responsibilities.md) for work packages and handoffs.
+Default local password: `BrightloopDemo!2026`. Set `DEMO_PASSWORD` before the first seed to choose another. These are not hosted administrator credentials. Repeated seeding preserves existing passwords, balances and record values; it does not reset a completed demo.
 
-Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md) and [API impact guide](docs/api-impact.md), including relationships, constraints and confirmed billing policies.
+The seeded reporting example uses October 2026 dates. Select that range when inspecting its historical invoices and payments. See [local fixture details](docs/prototype-v1.md#development-accounts-and-demo).
 
-Frontend implementation lives under `/frontend`.
+</details>
 
-All three contributors use the [API integration guide](docs/api-contracts.md), [OpenAPI file](docs/api/openapi.json) and [shared examples](docs/api/examples/manifest.json) before implementing their interfaces.
+For an unseeded installation, create the first administrator with `npm --prefix backend run admin:create` after setting `ADMIN_BOOTSTRAP_EMAIL` and a valid `ADMIN_BOOTSTRAP_PASSWORD` in the operator environment. Remove those bootstrap values afterward.
 
-## Required user journey
+Email features require the Gmail OAuth and encryption settings in `backend/.env.example`; they are not simulated when configuration is missing. See [backend setup](backend/README.md) and [deployment/worker operation](docs/integrated-product.md).
 
-Register/sign in -> configure products and plans -> create quotation -> confirm and activate subscription -> generate recurring invoice with taxes/discounts -> record payment -> review dashboard.
+### Validation commands
 
-Subscriptions follow **Draft -> Quotation -> Confirmed -> Active -> Closed**. Pause, renewal, early closure and automatic closure depend on plan policy. Customers access only their own records; only admins create staff and discount rules.
+```bash
+npm run check                         # Backend + frontend checks
+npm run test:integration              # Real PostgreSQL HTTP integration
+npm --prefix backend run test:db      # Database constraint checks
+npm run build                        # Compile both applications
+```
 
-## Start here
+The rendered browser suite is opt-in and requires Playwright/Edge and a test Vite proxy. Follow the [browser verification instructions](docs/integrated-product.md#local-page-timing-sample).
 
-1. Read [requirements](docs/requirements.md) for statement-derived scope and acceptance checks.
-2. Read [team responsibilities](docs/team-responsibilities.md) for your work package.
-3. Review confirmed billing defaults in [architecture](docs/architecture.md) and [API impact](docs/api-impact.md).
-4. Follow [the roadmap](plan.md) and [contribution workflow](contributing.md).
+## Repository map
 
-Application setup and test commands are maintained in [backend/README.md](backend/README.md). Never commit credentials or real customer data.
+```text
+frontend/                 React application, role-aware workflows and generated API types
+backend/
+  prisma/                 Authoritative schema, migrations and synthetic seed
+  src/modules/            Accounts, catalog, lifecycle, billing and reporting
+  scripts/                Workers, operator tools and database verification
+  test/                   Unit, PostgreSQL integration and browser acceptance
+docs/
+  api/                    OpenAPI contract, generator, examples and validator
+  images/                 Screenshots from the functional browser acceptance run
+  integrated-product.md   Current operation and verification guide
+.github/workflows/        PostgreSQL-backed continuous integration
+```
 
-## Documentation index
+## Team
 
-- [`agents.md`](./agents.md): Guidance and context for coding agents working in this repository.
-- [`contributing.md`](./contributing.md): Contribution workflow and quality expectations.
-- [`plan.md`](./plan.md): Current implementation roadmap and milestones.
-- [`docs/README.md`](./docs/README.md): Shared documentation structure and expansion guidance.
-- [`backend/README.md`](./backend/README.md): Backend setup, Prisma 7 workflow, and test commands.
+| Contributor | Responsibility |
+| --- | --- |
+| [Vishnu912py](https://github.com/Vishnu912py) | Team lead; architecture, backend behavior, authentication, lifecycle, integration and release |
+| [Zenfox-690](https://github.com/Zenfox-690) | Domain modeling, schema/migrations, transactional persistence, reporting queries and database integrity |
+| [albinsavi123-lang](https://github.com/albinsavi123-lang) | Admin/staff interfaces, customer portal, responsive layouts and dashboard presentation |
+
+## Scope and useful references
+
+This implementation uses **INR** and the **Asia/Kolkata** business timezone. Payments record receipts; they do not charge cards or transfer funds. Live payment gateways, refunds, multi-currency and advanced revenue recognition are outside this MVP. Free hosting limits apply; Vercel Services is a beta platform capability. Email retries provide durable recovery, but an ambiguous provider response can still produce a duplicate message.
+
+- [Current product operation and verification](docs/integrated-product.md)
+- [Challenge requirements and acceptance criteria](docs/requirements.md)
+- [Shared API contracts](docs/api-contracts.md) and [OpenAPI specification](docs/api/openapi.json)
+- [Data model and ER diagram](docs/er-diagram.md)
+- [Billing persistence handoff](docs/database-persistence-handoff.md) and [reporting handoff](docs/reporting-persistence-handoff.md)
+
+<a id="foundation-checklist--31-october-2026"></a>
+
+Earlier prototype documents and planning checklists describe historical increments. The [current product guide](docs/integrated-product.md) and this README supersede their implementation-status notes; the original team checklist remains available in Git history.
