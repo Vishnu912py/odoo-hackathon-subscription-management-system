@@ -2,6 +2,8 @@
 
 Status: proposed guidance, not an existing system. No application code or API exists yet.
 
+The [ER diagram and schema handoff](er-diagram.md) develops the proposed entities below into a PostgreSQL schema design using the React/Express/PostgreSQL baseline discussed with Vishnu. It is not an applied migration; runtime versions, hosting and listed business-policy decisions remain open.
+
 ## Decisions register
 
 | Decision | Status | Owner |

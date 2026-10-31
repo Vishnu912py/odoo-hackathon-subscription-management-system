@@ -18,6 +18,8 @@ The original documentation proposed an Odoo-based implementation. The supplied p
 
 See [team responsibilities](docs/team-responsibilities.md) for work packages and handoffs.
 
+Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md), including relationships, constraints and unresolved billing policies.
+
 ## Required user journey
 
 Register/sign in -> configure products and plans -> create quotation -> confirm and activate subscription -> generate recurring invoice with taxes/discounts -> record payment -> review dashboard.
