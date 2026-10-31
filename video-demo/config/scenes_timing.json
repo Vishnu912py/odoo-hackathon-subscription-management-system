@@ -1,0 +1,160 @@
+{
+  "project": {
+    "name": "Brightloop Software",
+    "description": "Enterprise Subscription & Recurring Revenue Management Platform",
+    "hackathon": "Odoo Hackathon 2026",
+    "team": [
+      {
+        "name": "Vishnu912py",
+        "role": "Team Lead & Architecture"
+      },
+      {
+        "name": "Zenfox-690",
+        "role": "Database & Persistence Specialist"
+      },
+      {
+        "name": "albinsavi123-lang",
+        "role": "Frontend & UI Specialist"
+      }
+    ],
+    "target_resolution": {
+      "width": 1920,
+      "height": 1080
+    },
+    "fps": 30,
+    "voice": "en-US-JennyNeural"
+  },
+  "total_duration": 127.39,
+  "scenes": [
+    {
+      "id": "scene_01_intro",
+      "scene_number": 1,
+      "title": "Brightloop \u2014 Next-Gen Subscription Management",
+      "narration": "Welcome to Brightloop Software \u2014 a modern, resilient subscription management and recurring revenue platform engineered for high-concurrency SaaS operations.",
+      "audio_file": "assets/audio/narration/scene_01_intro.mp3",
+      "audio_duration": 9.432,
+      "clip_duration": 10.23,
+      "start_time": 0.5,
+      "end_time": 9.93,
+      "is_slot": false,
+      "slot_name": null
+    },
+    {
+      "id": "scene_02_problem",
+      "scene_number": 2,
+      "title": "The Recurring Revenue Dilemma",
+      "narration": "Modern businesses struggle with fractured subscription lifecycles, race conditions in automated billing runs, duplicate invoices, and manual payment reconciliations that bleed revenue.",
+      "audio_file": "assets/audio/narration/scene_02_problem.mp3",
+      "audio_duration": 11.688,
+      "clip_duration": 12.49,
+      "start_time": 10.73,
+      "end_time": 22.42,
+      "is_slot": false,
+      "slot_name": null
+    },
+    {
+      "id": "scene_03_solution",
+      "scene_number": 3,
+      "title": "Engineered for Financial Correctness",
+      "narration": "Brightloop solves this from the ground up. Combining strict transaction boundaries, database-enforced state machines, and transparent customer self-service, it guarantees financial correctness at every step.",
+      "audio_file": "assets/audio/narration/scene_03_solution.mp3",
+      "audio_duration": 13.224,
+      "clip_duration": 14.02,
+      "start_time": 23.22,
+      "end_time": 36.44,
+      "is_slot": false,
+      "slot_name": null
+    },
+    {
+      "id": "scene_04_architecture",
+      "scene_number": 4,
+      "title": "Modern Full-Stack Architecture",
+      "narration": "Built on Node.js 24, Express 5, React 19, and PostgreSQL 16 with Prisma ORM. Strict OpenAPI 3.1 contracts ensure seamless type safety and security across the entire stack.",
+      "audio_file": "assets/audio/narration/scene_04_architecture.mp3",
+      "audio_duration": 15.624,
+      "clip_duration": 16.42,
+      "start_time": 37.24,
+      "end_time": 52.86,
+      "is_slot": false,
+      "slot_name": null
+    },
+    {
+      "id": "scene_05_slot1_dashboard",
+      "scene_number": 5,
+      "title": "Workspace & Role-Based Access Control",
+      "narration": "Brightloop features role-based access control, session-based authentication with CSRF protection, and segregated workspaces for administrators, billing specialists, and customers.",
+      "audio_file": "assets/audio/narration/scene_05_slot1_dashboard.mp3",
+      "audio_duration": 11.928,
+      "clip_duration": 12.73,
+      "start_time": 53.66,
+      "end_time": 65.59,
+      "is_slot": true,
+      "slot_name": "slot1_main_dashboard"
+    },
+    {
+      "id": "scene_06_slot2_subscriptions",
+      "scene_number": 6,
+      "title": "Deterministic Subscription Lifecycle",
+      "narration": "Subscriptions follow a rigorous lifecycle from quotation to activation. Plan policies enforce pause intervals, renewal rules, and automatic closures, backed by atomic database constraints.",
+      "audio_file": "assets/audio/narration/scene_06_slot2_subscriptions.mp3",
+      "audio_duration": 12.864,
+      "clip_duration": 13.66,
+      "start_time": 66.39,
+      "end_time": 79.25,
+      "is_slot": true,
+      "slot_name": "slot2_subscription_mgmt"
+    },
+    {
+      "id": "scene_07_slot3_invoices_payments",
+      "scene_number": 7,
+      "title": "Transactional Billing & Payment Tracking",
+      "narration": "Billing runs utilize database-level advisory locking and recovery leases to guarantee crash safety. Invoices calculate precise tax and discount rules, with idempotent payment recording.",
+      "audio_file": "assets/audio/narration/scene_07_slot3_invoices_payments.mp3",
+      "audio_duration": 12.336,
+      "clip_duration": 13.14,
+      "start_time": 80.05,
+      "end_time": 92.39,
+      "is_slot": true,
+      "slot_name": "slot3_invoice_payment"
+    },
+    {
+      "id": "scene_08_slot4_portal",
+      "scene_number": 8,
+      "title": "Customer Self-Service Portal",
+      "narration": "Customers enjoy a dedicated self-service portal to review active subscriptions, download invoices, and inspect payment histories \u2014 completely isolated at the database level.",
+      "audio_file": "assets/audio/narration/scene_08_slot4_portal.mp3",
+      "audio_duration": 11.232,
+      "clip_duration": 12.03,
+      "start_time": 93.19,
+      "end_time": 104.42,
+      "is_slot": true,
+      "slot_name": "slot4_customer_portal"
+    },
+    {
+      "id": "scene_09_slot5_reporting",
+      "scene_number": 9,
+      "title": "High-Performance Analytics & Verification",
+      "narration": "Our reporting persistence layer delivers sub-second analytics across 100,000 invoices under RepeatableRead transaction snapshots \u2014 fully verified for enterprise scale.",
+      "audio_file": "assets/audio/narration/scene_09_slot5_reporting.mp3",
+      "audio_duration": 10.752,
+      "clip_duration": 11.55,
+      "start_time": 105.22,
+      "end_time": 115.97,
+      "is_slot": true,
+      "slot_name": "slot5_reporting_dashboard"
+    },
+    {
+      "id": "scene_10_closing",
+      "scene_number": 10,
+      "title": "Brightloop \u2014 Built for Scale & Reliability",
+      "narration": "Brightloop: predictable recurring revenue, bulletproof persistence, and exceptional user experience. Built with passion for the Odoo Hackathon.",
+      "audio_file": "assets/audio/narration/scene_10_closing.mp3",
+      "audio_duration": 9.816,
+      "clip_duration": 10.62,
+      "start_time": 116.77,
+      "end_time": 126.59,
+      "is_slot": false,
+      "slot_name": null
+    }
+  ]
+}

@@ -19,3 +19,9 @@ __pycache__/
 tmp/
 .vercel
 .env*
+
+# Video demo intermediate clips
+video-demo/output/clips/*
+!video-demo/output/clips/.gitkeep
+
+
