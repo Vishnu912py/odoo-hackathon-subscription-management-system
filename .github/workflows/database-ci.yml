@@ -6,6 +6,7 @@ on:
       - main
       - feat/db-schema
       - feat/prototype-v1
+      - feat/db-reporting
   pull_request:
     branches:
       - main
