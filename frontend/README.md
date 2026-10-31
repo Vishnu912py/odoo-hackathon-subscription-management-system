@@ -73,3 +73,13 @@ Automated browser access was declined, so visual layout and the actual browser c
 ## Authentication increment
 
 Forgot-password and link-based password setup use the real API. Admin sessions gain a Staff tab for invitations and enable/disable controls. See [authentication handoff](../docs/authentication-v1.md) for Gmail configuration and Vercel deployment. Mail acceptance does not prove inbox delivery.
+# PR #13 integration
+
+Catalog and subscription screens are integrated into the F1 authenticated sidebar.
+Catalog editing and staff management are admin-only; the global Payments page is
+available to admin/staff. Customers retain their owned subscription and invoice
+views. Subscription invoice links open the existing invoice detail/payment view.
+The shared navigation test checks that sidebar visibility and catalog guards agree.
+Frontend screens do not imply that pending backend catalog/lifecycle operations
+are implemented; those endpoints can still return explicit 501 responses.
+
