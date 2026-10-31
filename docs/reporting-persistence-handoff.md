@@ -120,7 +120,7 @@ for (const path of ['/reports/overview', '/portal/overview']) {
 ## 4. Customer-Scope Enforcement Boundary
 
 1. **Server-Side Actor Scoping:**
-   - When `user.role === 'CUSTOMER'`, `customerUserId` is injected directly from `user.id`. The query joins `customers c ON s.customer_id = c.id` and applies `WHERE c.user_id = $userId::uuid`.
+   - When `user.role === 'CUSTOMER'`, `customerUserId` is injected directly from `user.id`. Scoping applies `customer: { userId: user.id }`.
    - Any client attempt to supply a `customer_id` query parameter on customer routes is blocked by `prototype.ts` with `403 FORBIDDEN`.
 2. **Staff Aggregate & Filter Scoping:**
    - Staff/Admin users can view aggregate metrics across all customers (omitting customer filters) or target a single customer using `customerId: q.customer_id`.
@@ -131,7 +131,7 @@ for (const path of ['/reports/overview', '/portal/overview']) {
 
 ## 5. Aggregation & Query Strategy
 
-Instead of retrieving every invoice, payment, and subscription row into Node.js, `report-persistence.ts` executes four bounded, parameterized PostgreSQL queries:
+Instead of loading full invoice, payment, and subscription entities into Node.js, `report-persistence.ts` executes targeted, bounded queries via Prisma Client inside a single `RepeatableRead` transaction snapshot:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -147,7 +147,9 @@ Instead of retrieving every invoice, payment, and subscription row into Node.js,
 │ Subscription │    │ Balances &   │    │ Monthly      │
 │ Counts       │    │ Overdue Sums │    │ Invoices &   │
 │ (Active /    │    │ (Point-in-   │    │ Payments     │
-│ Paused)      │    │ time status) │    │ (GROUP BY)   │
+│ Paused)      │    │ time status) │    │ (Bounded     │
+│ Database-side│    │ Scalar       │    │ Scalar       │
+│ COUNT(*)     │    │ Projection)  │    │ Projections) │
 └──────┬───────┘    └──────┬───────┘    └──────┬───────┘
        │                   │                   │
        └───────────────────┼───────────────────┘
@@ -161,63 +163,20 @@ Instead of retrieving every invoice, payment, and subscription row into Node.js,
                   OverviewReportData
 ```
 
-1. **Subscription Counts (1 row):**
-   ```sql
-   SELECT
-     COALESCE(COUNT(CASE WHEN s.is_paused = false THEN 1 END), 0)::int AS active_subscriptions,
-     COALESCE(COUNT(CASE WHEN s.is_paused = true THEN 1 END), 0)::int AS paused_subscriptions
-   FROM subscriptions s
-   [JOIN customers c ON s.customer_id = c.id]
-   WHERE s.status = 'ACTIVE'
-     AND s.start_date <= $asOf::date
-     AND (s.expiry_date IS NULL OR s.expiry_date > $asOf::date)
-     [AND c.user_id = $userId::uuid | s.customer_id = $customerId::uuid]
-     [AND s.plan_id = $planId::uuid];
-   ```
-2. **Current Balances (1 row):**
-   ```sql
-   SELECT
-     COALESCE(SUM(i.total - i.amount_paid), 0)::text AS outstanding_balance,
-     COALESCE(SUM(CASE WHEN i.due_date < $asOf::date THEN i.total - i.amount_paid ELSE 0 END), 0)::text AS overdue_balance,
-     COALESCE(COUNT(CASE WHEN i.due_date < $asOf::date THEN 1 END), 0)::int AS overdue_invoice_count
-   FROM invoices i
-   JOIN subscriptions s ON i.subscription_id = s.id
-   [JOIN customers c ON s.customer_id = c.id]
-   WHERE i.status = 'CONFIRMED'
-     AND i.total > i.amount_paid
-     [AND c.user_id = $userId::uuid | s.customer_id = $customerId::uuid]
-     [AND s.plan_id = $planId::uuid];
-   ```
-3. **Monthly Invoices (at most 13 rows):**
-   ```sql
-   SELECT
-     TO_CHAR(i.issue_date, 'YYYY-MM') AS month,
-     COALESCE(SUM(i.total), 0)::text AS invoiced_total
-   FROM invoices i
-   JOIN subscriptions s ON i.subscription_id = s.id
-   [JOIN customers c ON s.customer_id = c.id]
-   WHERE i.status IN ('CONFIRMED', 'PAID')
-     AND i.issue_date >= $from::date AND i.issue_date <= $to::date
-     [AND c.user_id = $userId::uuid | s.customer_id = $customerId::uuid]
-     [AND s.plan_id = $planId::uuid]
-   GROUP BY TO_CHAR(i.issue_date, 'YYYY-MM')
-   ORDER BY month ASC;
-   ```
-4. **Monthly Payments (at most 13 rows):**
-   ```sql
-   SELECT
-     TO_CHAR(p.payment_date, 'YYYY-MM') AS month,
-     COALESCE(SUM(p.amount), 0)::text AS payments_received
-   FROM payments p
-   JOIN invoices i ON p.invoice_id = i.id
-   JOIN subscriptions s ON i.subscription_id = s.id
-   [JOIN customers c ON s.customer_id = c.id]
-   WHERE p.payment_date >= $from::date AND p.payment_date <= $to::date
-     [AND c.user_id = $userId::uuid | s.customer_id = $customerId::uuid]
-     [AND s.plan_id = $planId::uuid]
-   GROUP BY TO_CHAR(p.payment_date, 'YYYY-MM')
-   ORDER BY month ASC;
-   ```
+1. **Subscription Counts (Database-Side `COUNT(*)`):**
+   - Uses `tx.subscription.count` with `status: 'ACTIVE'`, `startDate <= asOf`, `(expiryDate IS NULL OR expiryDate > asOf)`, and `isPaused`.
+   - Runs database-side aggregation without transferring subscription records to Node.js.
+   - Automatically qualified with the active tenant or isolated test schema.
+
+2. **Current Balances (Point-in-Time Snapshot):**
+   - Retrieves scalar projections (`dueDate`, `total`, `amountPaid`) for confirmed invoices (`status: 'CONFIRMED'`).
+   - Calculates exact decimal balances (`total.minus(amountPaid)`) and compares `dueDate < asOf` using exact decimal math.
+   - Point-in-time snapshot remains independent of the selected movement date range `[from, to]`.
+
+3. **Monthly Invoices & Payments (Bounded Date Window):**
+   - Date range is validated to at most 366 days and cannot end in the future.
+   - Retrieves only scalar fields (`issueDate`, `total`) for `CONFIRMED` and `PAID` invoices and (`paymentDate`, `amount`) for recorded payments within inclusive date bounds.
+   - Aggregates amounts into continuous monthly buckets, populating zero-activity months with `"0.00"`.
 
 ---
 
@@ -226,7 +185,7 @@ Instead of retrieving every invoice, payment, and subscription row into Node.js,
 The PostgreSQL integration suite in `backend/test/integration/prototype.test.ts` exercises the reporting endpoints against real PostgreSQL:
 
 | Scenario / Fixture State | Invoiced Total | Payments Received | Outstanding Balance | Overdue Balance | Overdue Invoices | Active Subs | Paused Subs |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Fresh Seed (1–31 Oct 2026)** | `1180.00` | `500.00` | `680.00` | `680.00` | `1` | `1` | `0` |
 | **Full Payment Recorded** | `1180.00` | `1180.00` | `0.00` | `0.00` | `0` | `1` | `0` |
 | **Multi-Customer Admin View** | `3180.00` | `1980.00` | `1200.00` | `1200.00` | `1` | `2` | `0` |

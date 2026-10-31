@@ -382,6 +382,15 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       await customer.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(403);
       await staff.agent.get('/api/v1/portal/overview?from=2026-10-01&to=2026-10-31').expect(403);
       await customer.agent.get(`/api/v1/portal/overview?from=2026-10-01&to=2026-10-31&customer_id=${cust2ProfileId}`).expect(403);
+
+      // Cleanup D4 fixtures so subsequent test assertions on total invoice/subscription counts remain clean
+      await prisma.payment.deleteMany({ where: { id: cust2PayId } });
+      await prisma.invoice.deleteMany({ where: { id: cust2InvId } });
+      await prisma.subscription.deleteMany({ where: { id: { in: [cust2SubId, pausedSub.id, futureSub.id, expiredSub.id] } } });
+      await prisma.customer.deleteMany({ where: { id: cust2ProfileId } });
+      await prisma.session.deleteMany({ where: { user: { email: 'cust2@example.test' } } });
+      await prisma.user.deleteMany({ where: { id: cust2UserId } });
+      await prisma.plan.deleteMany({ where: { id: planBId } });
     });
 
     await t.test('query allowlists, pagination, inclusive dates, and disabled accounts', async () => {
