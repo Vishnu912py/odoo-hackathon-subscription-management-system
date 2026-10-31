@@ -1,6 +1,8 @@
 # Integrated Brightloop product — 31 October 2026
 
-This checkout integrates the catalog, subscription lifecycle, billing persistence, invoice actions, payments, reports and customer portal. All **68 OpenAPI operations** have concrete handlers. The earlier prototype documents and dated team checklists describe historical increments; this guide records the current local implementation. Deployment and real email acceptance are separate release checks.
+This checkout integrates the catalog, subscription lifecycle, billing persistence, invoice actions, payments, reports and customer portal. All **75 OpenAPI operations** have concrete handlers. The earlier prototype documents and dated team checklists describe historical increments; this guide records the current implementation.
+
+Hosted application: https://brightloop-subscriptions-alpha.vercel.app. The database is the free Supabase project `brightloop-subscriptions` in VishnuTeam (Mumbai). Vercel runs the frontend and API; the private `brightloop` schema uses a dedicated server database role and a certificate-verified session pooler. Anonymous/authenticated Supabase API roles have no schema privileges; RLS is enabled without public policies intentionally. Application roles and customer ownership are enforced by Express.
 
 ## Run the product
 
@@ -30,43 +32,49 @@ npm run dev
 5. Confirm, cancel, email or print an invoice from its detail view. Cancellation requires a reason and no payments, reserves the period permanently, and does not restore discount usage.
 6. Record actual payment receipts. Exact decimal balances, row locks, version preconditions and idempotent replay protect against stale and repeated submissions. Reports reflect persisted invoices and payments. Customers see only their owned records and cannot record payments or run billing.
 
-Customer records created by staff are billing profiles, not automatically verified login accounts. Customer signup creates its own linked profile; the server does not link identities merely because a staff-entered billing email matches a login email.
+Customer records created by staff are billing profiles, not automatically verified login accounts. Staff can send a single-use, 30-minute portal invitation. Acceptance verifies possession of the link and, for an existing account, its password; it refuses staff accounts and customers with another populated billing profile. Customer signup creates its own linked profile; email equality alone never links identities.
+
+Draft subscriptions support editing lines, prices, taxes, terms and dates. Details show paginated lifecycle history, related invoices, payment history and delivery attempts. Lists expose date/status/search filters; reports support plan filtering, including customer-owned plans. Administrators can inspect persisted billing runs and retry failed runs. Staff can retry failed invoice deliveries.
 
 ## Worker and delivery operation
 
 - `npm --prefix backend run billing:watch` runs a processing pass every 30 seconds. `billing:run` runs one pass. The root development command includes the watcher.
-- A pass creates one automatic run per business date and processes up to ten pending/resumable runs. Each persistence batch is bounded by its period limit, and further passes continue catch-up. Failed periods retain their due cursor and expose sanitized errors. Investigate repeated failures rather than assuming a running job is complete.
+- A pass creates an automatic run for the business date and picks up newly due subscriptions after an earlier completed pass. It processes up to ten pending/resumable runs. Each batch is bounded by its period limit. Failed subscriptions are excluded from later batches of that same run, allowing it to finish with errors; their due cursor remains recoverable through an explicit retry after repair.
 - A run uses a dedicated PostgreSQL connection for its session advisory lock. Use a direct/session-capable database connection; transaction-pooling proxies are unsuitable for that lock.
-- Hosted schedulers can call `GET /api/internal/billing-maintenance` with `Authorization: Bearer <CRON_SECRET>`. Schedule repeated passes at a cadence appropriate for volume. The existing auth-maintenance endpoint remains separate. A hosted billing schedule has **not** been enabled by this change.
+- Supabase pg_cron calls `GET /api/internal/billing-maintenance` every minute using pg_net. Its bearer secret is stored in Supabase Vault. Successful scheduled HTTP 200 responses were observed. Vercel also invokes auth maintenance daily. The maintenance worker processes billing, invoice delivery and authentication email retries.
 - Email requests create durable outbox rows addressed only to the invoice billing-email snapshot. The worker uses configured Gmail transport and retries failures after five minutes. Missing mail configuration returns 503 when queueing; no delivery success is fabricated.
 - `sent_at` is recorded after provider acceptance, not queue time. Same-key HTTP retries queue once. Gmail cannot guarantee exactly-once delivery after an ambiguous provider response/process crash, so a rare duplicate delivery remains possible. An intentional resend uses a fresh key.
-- Invoice PDFs use PDFKit, preserve decimal strings, paginate line items and require the same ownership checks as invoice details. The current standard-font layout targets Latin-script billing data; additional script fonts require embedding and rendering validation.
+- Invoice PDFs use PDFKit, preserve decimal strings, paginate line items and enforce ownership. Embedded OFL Noto fonts support Latin, Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada and Malayalam; a multilingual invoice was rendered and visually checked. Font licenses are alongside the files in `backend/src/assets/fonts`.
 - Existing direct calls to `createSubscriptionInvoice` retain their prior confirmed-invoice default for persistence compatibility. Scheduled/API billing explicitly requests draft invoices.
 
 ## Verification recorded
 
 - Backend `npm run check`: Prisma validation/generation, TypeScript, 17 unit/foundation tests and compilation passed.
-- PostgreSQL `npm run test:integration`: 18 tests including enclosing tests passed in temporary schemas. Covers auth/ownership, catalog writes, lifecycle policies, payment concurrency, reporting, draft billing, confirm/cancel, PDF access, email failure/retry and idempotent outbox behavior. External transport is injected; no test invoice email is sent to a real recipient.
+- PostgreSQL `npm run test:integration`: 21 tests including enclosing tests passed in temporary schemas. Covers auth/ownership, catalog writes, lifecycle policies, payment concurrency, reporting, draft billing, confirm/cancel, PDF access, invitation acceptance, email failure/retry, billing failure/recovery, late activation and idempotency. Normal runs inject transport; real mail is opt-in only.
 - Frontend `npm run check`: generated contract types, 33 tests, lint, TypeScript and production build passed.
-- Browser acceptance: headless Edge, desktop 1440×1000, customer creation → draft → quotation → confirmation → activation → queued billing → worker → invoice confirmation → payment. Persisted invoice was paid with its exact total. No JavaScript page errors. Mobile 390×844 navigation opens/closes and document width stays within the viewport. PDF and desktop/mobile screenshots were rendered and visually reviewed.
-- All 68 shared operations are registered. No schema/field/role/money-format contract changes were introduced. The standalone Python OpenAPI validator requires `openapi-spec-validator==0.7.2`, absent from the current Python environment; it was not reported as passing. Response-contract checks and generated frontend types passed.
+- Browser acceptance: all 12 V3 checks passed with headless Edge, desktop 1440×1000, customer creation → draft editing → quotation → confirmation → activation → queued billing → worker → invoice confirmation → payment. Persisted invoice was paid with its exact total. No JavaScript page errors. Mobile 390×844 navigation opens/closes and document width stays within the viewport. The backdrop close target is limited to its visible area beside the drawer. PDF and desktop/mobile screenshots were rendered and visually reviewed.
+- All 75 shared operations are registered. The Python OpenAPI validator passed: 75 operations, 111 schemas, 10 valid examples and 8 rejected invalid cases. Response-contract checks and generated frontend types passed.
+- Hosted HTTP acceptance passed against persisted Supabase data: authenticated catalog creation → customer → quotation → confirmation → activation → billing → confirmed invoice → exact payment → PDF → report. The synthetic subscription was scheduled to close; its financial records are clearly labelled acceptance tests, not actual revenue.
+- Real invitation, invoice and password-reset messages to the authorized inbox were confirmed in Gmail. The invitation was accepted and its customer login returned the owned hosted invoice. Invoice outbox status reached SENT. The administrator password-setup link remains for the owner to use.
 
 ### Local page timing sample
 
-The browser test creates 5,000 additional subscriptions, one line each, and 5,000 invoice summaries in the temporary database, on top of the integration fixtures. Invoice clones intentionally do not include corresponding historical payment/line records, so this is a **list/dashboard rendering workload**, not an accounting reconciliation dataset. Reconciliation uses the separate integration fixtures.
+The browser test creates 5,000 additional subscriptions and invoices, with copied line, tax and payment records, in the temporary database. This is a list/dashboard rendering workload; detailed accounting reconciliation also uses the integration fixtures.
 
 Environment: Windows, AMD Ryzen AI 5 340, local PostgreSQL, Node.js 24, Vite development server, headless Edge, no CPU/network throttling. Five authenticated in-app navigation samples per page, timed from navigation click until loaded content is rendered. Latest recorded sample before the final documentation pass:
 
 | Page | Samples (ms) | Maximum |
 | --- | --- | --- |
-| Overview | 303, 214, 282, 217, 280 | 303 ms |
-| Subscriptions | 153, 145, 136, 153, 141 | 153 ms |
-| Invoices | 87, 87, 89, 81, 86 | 89 ms |
+| Overview | 522, 272, 310, 385, 332 | 522 ms |
+| Subscriptions | 190, 147, 199, 141, 156 | 199 ms |
+| Invoices | 264, 110, 106, 143, 147 | 264 ms |
 
 These local samples meet the two-second target for the measured pages. They do not establish cold-load, hosted-network, concurrent-user or production performance.
 
 To repeat the optional rendered suite, start Vite on port 5174 with `BACKEND_PROXY_TARGET=http://127.0.0.1:3001`. From `backend`, set `BROWSER_ORIGIN=http://localhost:5174` and `E2E_PLAYWRIGHT_MODULE` to an installed Playwright package path, then run `node node_modules/tsx/dist/cli.mjs --test test/integration/v3.test.ts`. Edge must be installed. The suite serves the isolated test API on 3001 and writes ignored screenshots/timings under `tmp/`, then removes its test schema. Normal integration runs do not require Playwright.
 
-## External release checks
+## Deployment and operational notes
 
-Hosted database provisioning/migrations, secrets, HTTPS deployment, scheduler enablement, real reset/invoice inbox delivery, and production performance acceptance remain to be verified in the target environment. Do not present this local integration as an already deployed service.
+`vercel.json` uses Vercel Services with a root backend entrypoint. Its build command runs typechecking so Vercel packages source and traces dependencies instead of treating standalone `dist` as a dependency-complete bundle. `prepare_build.mjs` generates the runtime OpenAPI module and copies runtime assets for local compiled builds. Supabase CA certificates remain verified. Services is a Vercel beta capability.
+
+Payment recording is an accounting workflow; this product does not charge cards or connect a payment gateway. Hosted concurrent-load/cold-start performance has not been benchmarked. Free-tier service limits still apply. No paid plan was enabled. The owner sets their administrator password through the delivered reset email; expired links can be requested using Forgot password.

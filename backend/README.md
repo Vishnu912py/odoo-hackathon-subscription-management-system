@@ -1,6 +1,6 @@
 # Brightloop backend
 
-> Current checkout update (31 October 2026): all 68 API operations are integrated. See [the product guide](../docs/integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; deployment and real-email acceptance remain separate checks.
+> Current checkout update (31 October 2026): all 75 API operations are integrated. See [the product guide](../docs/integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; hosted deployment and real-email acceptance are verified in the product guide.
 
 Express + TypeScript server foundation with PostgreSQL through Prisma ORM and Prisma Migrate. The frontend connects through the Vite development proxy. See [prototype v1](../docs/prototype-v1.md) for integrated setup.
 
