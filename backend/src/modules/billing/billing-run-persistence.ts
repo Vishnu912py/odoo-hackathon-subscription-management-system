@@ -160,10 +160,13 @@ export async function executeBillingRun(
     }
 
     const asOfDate = initialRun.asOfDate;
+    const previousErrors = Array.isArray(initialRun.errors) ? initialRun.errors as Array<{ subscriptionId: string; periodStart: string; error: string }> : [];
+    const failedIds = previousErrors.map(error => error.subscriptionId);
     const whereClause: Prisma.SubscriptionWhereInput = {
-      status: 'ACTIVE',
+      status: { in: ['ACTIVE', 'CLOSED'] },
       nextBillingDate: { lte: asOfDate },
       ...(initialRun.subscriptionIdFilter ? { id: initialRun.subscriptionIdFilter } : {}),
+      AND: [{ id: { notIn: failedIds } }],
     };
 
     // 3. Fetch candidate due subscriptions for this batch
@@ -184,12 +187,20 @@ export async function executeBillingRun(
     let batchGenerated = 0;
     let batchReused = 0;
     let batchFailed = 0;
-    const errorDetails: Array<{ subscriptionId: string; error: string }> = [];
+    const errorDetails: Array<{ subscriptionId: string; periodStart: string; error: string }> = [...previousErrors];
 
     // 4. Process each subscription in its own atomic transaction
-    for (const sub of candidateSubscriptions) {
+    for (const candidate of candidateSubscriptions) {
       try {
         await prisma.$transaction(async (tx) => {
+          await tx.subscription.updateMany({ where: { id: candidate.id }, data: { version: { increment: 0 } } });
+          const sub = await tx.subscription.findUniqueOrThrow({ where: { id: candidate.id } });
+          if (!sub.nextBillingDate || sub.nextBillingDate > asOfDate || !['ACTIVE', 'CLOSED'].includes(sub.status)) return;
+          const stop = [sub.expiryDate, sub.closeEffectiveDate].filter((d): d is Date => d !== null).sort((a, b) => a.getTime() - b.getTime())[0];
+          if (stop && sub.nextBillingDate >= stop) {
+            await tx.subscription.update({ where: { id: sub.id }, data: { nextBillingDate: null } });
+            return;
+          }
           // Calculate next period bounds with anchor day preservation
           const currentStart = sub.nextBillingDate ?? sub.startDate ?? asOfDate;
           const refDate = sub.startDate ? new Date(sub.startDate) : (sub.nextBillingDate ? new Date(sub.nextBillingDate) : new Date(asOfDate));
@@ -218,7 +229,8 @@ export async function executeBillingRun(
             subscriptionId: sub.id,
             periodStart,
             periodEnd,
-            issueDate: asOfDate,
+            issueDate: periodStart,
+            initialStatus: 'DRAFT',
             advanceSchedule: true,
           });
 
@@ -232,7 +244,7 @@ export async function executeBillingRun(
                   { nextBillingDate: { lt: periodEnd } },
                 ],
               },
-              data: { nextBillingDate: periodEnd },
+              data: { nextBillingDate: stop && periodEnd >= stop ? null : periodEnd },
             });
 
             await tx.billingRun.update({
@@ -268,7 +280,8 @@ export async function executeBillingRun(
       } catch (err: any) {
         batchFailed++;
         errorDetails.push({
-          subscriptionId: sub.id,
+          subscriptionId: candidate.id,
+          periodStart: candidate.nextBillingDate!.toISOString().slice(0, 10),
           error: err?.message || String(err),
         });
 
@@ -285,10 +298,10 @@ export async function executeBillingRun(
 
     // 5. Query PostgreSQL directly for true remaining due count
     const remainingDueCount = await prisma.subscription.count({
-      where: whereClause,
+      where: { ...whereClause, AND: [{ id: { notIn: errorDetails.map(error => error.subscriptionId) } }] },
     });
     const hasMore = remainingDueCount > 0;
-    const nextRunRequired = hasMore || batchFailed > 0;
+    const nextRunRequired = hasMore || errorDetails.length > 0;
 
     // 6. Re-read durable counters from database
     const latestRun = await prisma.billingRun.findUniqueOrThrow({

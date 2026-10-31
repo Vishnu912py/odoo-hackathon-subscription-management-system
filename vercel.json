@@ -12,8 +12,9 @@
     "backend": {
       "root": "backend",
       "framework": "express",
-      "entrypoint": "src/vercel.ts",
-      "buildCommand": "npm run build"
+      "entrypoint": "vercel.ts",
+      "buildCommand": "npm run typecheck",
+      "installCommand": "npm ci --include=dev && node scripts/prepare_build.mjs && npx prisma generate"
     }
   },
   "rewrites": [

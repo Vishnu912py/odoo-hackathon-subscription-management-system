@@ -1,3 +1,4 @@
+import RecordMultiSelect from './RecordMultiSelect'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError, errorMessage, type PreparedMutation } from '../../api/client'
 import type { Product, ProductInput, ProductListResponse, ProductResponse, ProductUpdate, Variant, VariantInput, VariantResponse, VariantUpdate } from '../../api/schema'
@@ -423,13 +424,8 @@ export default function ProductsManagement({ onExpired }: Props) {
               </div>
 
               <div className="catalog-field">
-                <label>Tax IDs (comma-separated UUIDs)</label>
-                <input
-                  type="text"
-                  value={formTaxIds}
-                  onChange={e => setFormTaxIds(e.target.value)}
-                  placeholder="Optional UUIDs"
-                />
+                <label>Applicable taxes</label>
+                <RecordMultiSelect resource="/taxes" label="Taxes" value={formTaxIds} onChange={setFormTaxIds} />
               </div>
 
               <div className="catalog-field full-width">

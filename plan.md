@@ -1,5 +1,7 @@
 # Implementation roadmap
 
+> Current checkout update (31 October 2026): all 68 API operations are integrated. See [the product guide](docs/integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; deployment and real-email acceptance remain separate checks.
+
 ## Goal
 
 Build the Brightloop subscription platform described in `docs/requirements.md`. Status: backend and database foundations are implemented, alongside a React dashboard prototype. Domain schema, migrations and synthetic fixtures are in `backend/prisma`; prototype v1 implements auth, owned reads, reports and transactional payment recording. The full subscription-create/activate/bill journey remains incomplete. React/TypeScript, Express/TypeScript, PostgreSQL and Prisma ORM/Migrate form the baseline. Backend uses Node.js 24/Prisma 7 in `backend/`. Vercel is selected; deployment configuration is present and hosted database/Gmail setup remains pending. See the dated [implementation checklist](README.md#foundation-checklist--31-october-2026) for completed deliverables and local-only work. Use `docs/api-contracts.md` for shared interfaces and confirmed MVP defaults. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.

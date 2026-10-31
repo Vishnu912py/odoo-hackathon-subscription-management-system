@@ -16,9 +16,12 @@ export function decryptMessage(value: string, key: string): AuthMessage {
   return JSON.parse(Buffer.concat([cipher.update(Buffer.from(data!, 'hex')), cipher.final()]).toString());
 }
 export async function queueMail(tx: Prisma.TransactionClient, config: Config, to: string, token: string, expiresAt: Date, invitation = false) {
-  const mail = requireMail(config);
   const message: AuthMessage = { to, subject: invitation ? 'Set up your Brightloop staff account' : 'Reset your Brightloop password',
     text: `Use this single-use link within 30 minutes:\n${config.frontendOrigin}/#reset=${token}\nIf you did not request this, ignore this email.` };
+  await queueMessage(tx, config, message, expiresAt);
+}
+export async function queueMessage(tx: Prisma.TransactionClient, config: Config, message: AuthMessage, expiresAt: Date) {
+  const mail = requireMail(config);
   const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', Buffer.from(mail.encryptionKey, 'hex'), iv);
   const data = Buffer.concat([cipher.update(JSON.stringify(message)), cipher.final()]);
   await tx.authEmailJob.create({ data: { expiresAt, encryptedMessage: `${iv.toString('hex')}.${cipher.getAuthTag().toString('hex')}.${data.toString('hex')}` } });

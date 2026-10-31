@@ -1,5 +1,7 @@
 # Prototype v1: frontend → Express → PostgreSQL
 
+> Current checkout update (31 October 2026): all 68 API operations are integrated. See [the product guide](integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; deployment and real-email acceptance remain separate checks.
+
 Branch: `feat/prototype-v1`. This preserves the earlier frontend integration work and includes Zenfox's merged Prisma 7 schema/migrations. It does not modify `main` or rewrite migration history.
 
 ## Working scope

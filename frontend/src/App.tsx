@@ -488,12 +488,12 @@ function DemoDashboard() {
 }
 
 export default function App() {
-  const [preview, setPreview] = useState(false)
+  const [preview, setPreview] = useState(() => new URLSearchParams(window.location.search).get('preview') === 'design')
   return <>
-    <div className="connection-mode">
+    {preview && <div className="connection-mode">
       <strong>{preview ? 'Design preview · illustrative data only' : 'Live backend workspace'}</strong>
       <button onClick={() => setPreview(value => !value)}>{preview ? 'Open live workspace' : 'View Albin’s design preview'}</button>
-    </div>
+    </div>}
     {preview ? <div className="demo-preview"><DemoDashboard /></div> : <LiveWorkspace />}
   </>
 }

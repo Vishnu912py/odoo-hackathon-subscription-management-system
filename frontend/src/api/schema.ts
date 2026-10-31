@@ -1,5 +1,5 @@
 // Generated from docs/api/openapi.json. Do not edit manually.
-// Source SHA-256: 005601ff4523c63318489483fb1a828119b7b7ba489a18c4d5af4a19edcc3e2f
+// Source SHA-256: ef433b99c8acb34d9513e15bc290c66a1d4142d83dd13fb6cfad62cf36ac591e
 
 export type Error = { "error": { "code": string; "message": string; "fields": Array<{ "path": string; "code": string; "message": string }>; "request_id": string } }
 
@@ -135,6 +135,12 @@ export type BillingRun = { "id": string; "status": "queued" | "running" | "compl
 
 export type Overview = { "from": string; "to": string; "as_of": string; "currency": "INR"; "active_subscriptions": number; "paused_subscriptions": number; "invoiced_total": string; "payments_received": string; "outstanding_balance": string; "overdue_balance": string; "overdue_invoice_count": number; "monthly": Array<{ "month": string; "invoiced_total": string; "payments_received": string }>; "revenue_basis": "invoiced_excluding_cancelled" }
 
+export type CustomerInvitationInput = { "token": string; "password": string }
+
+export type InvoiceDelivery = { "id": string; "invoice_id": string; "recipient": string; "status": "pending" | "failed" | "sent" | "cancelled"; "attempts": number; "last_attempt_at": string | null; "sent_at": string | null; "error": string | null; "created_at": string }
+
+export type PlanOption = { "id": string; "name": string }
+
 export type CsrfResponse = { "data": Csrf }
 
 export type UserResponse = { "data": User }
@@ -204,5 +210,15 @@ export type PaymentResponse = { "data": Payment }
 export type PaymentListResponse = { "data": Array<Payment>; "meta": PageMeta }
 
 export type BillingRunResponse = { "data": BillingRun }
+
+export type BillingRunListResponse = { "data": Array<BillingRun>; "meta": PageMeta }
+
+export type InvoiceDeliveryResponse = { "data": InvoiceDelivery }
+
+export type InvoiceDeliveryListResponse = { "data": Array<InvoiceDelivery>; "meta": PageMeta }
+
+export type PlanOptionResponse = { "data": PlanOption }
+
+export type PlanOptionListResponse = { "data": Array<PlanOption>; "meta": PageMeta }
 
 export type OverviewResponse = { "data": Overview }

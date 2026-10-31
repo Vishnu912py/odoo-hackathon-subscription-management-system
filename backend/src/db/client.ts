@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
+import { databaseConnectionUrl } from './connection.js';
 
 export type DatabaseState = 'connected' | 'unavailable' | 'not_configured';
 export interface Database {
@@ -15,7 +16,7 @@ export function createDatabase(connectionString?: string): Database {
   }
   const schema = new URL(connectionString).searchParams.get('schema') ?? 'public';
   const adapter = new PrismaPg({
-    connectionString,
+    connectionString: databaseConnectionUrl(connectionString),
     max: 5,
     connectionTimeoutMillis: 3000,
     idleTimeoutMillis: 10000,

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import generatedContract from './generated/api-contract.js';
 
 export type ContractMethod = 'get' | 'post' | 'patch';
 export interface ContractOperation {
@@ -12,10 +12,8 @@ export interface ApiContract {
   paths: Record<string, Partial<Record<ContractMethod, ContractOperation>>>;
 }
 
-// src/ and dist/ have the same depth. Keep the repository docs with deployments.
-export const contractPath = new URL('../../docs/api/openapi.json', import.meta.url);
 export function loadContract(): ApiContract {
-  const contract: unknown = JSON.parse(readFileSync(contractPath, 'utf8'));
+  const contract: unknown = generatedContract;
   if (!contract || typeof contract !== 'object' || !('paths' in contract) || !('info' in contract)) {
     throw new Error('The shared OpenAPI contract is invalid or missing.');
   }

@@ -6,6 +6,13 @@
 
 /* Live App Shell Integration */
 .live-app-shell { min-height: 100vh; display: flex; background: #f8faf8; }
+.live-app-shell .main-area { flex: 1; min-width: 0; }
+.live-app-shell .table-scroll { max-width: 100%; overflow-x: auto; }
+.live-sidebar { overflow-y: auto; }
+.live-page-content input, .live-page-content select, .live-page-content textarea { max-width: 100%; box-sizing: border-box; }
+.live-page-content fieldset { min-width: 0; border: 1px solid #dbe6de; border-radius: 8px; padding: 14px; }
+.live-page-content fieldset label { display: block; margin-bottom: 12px; }
+.live-page-content fieldset input:not([type=checkbox]), .live-page-content fieldset textarea, .live-page-content fieldset select { display: block; width: 100%; padding: 8px; }
 .live-sidebar { border-right: 1px solid #e2eae4; background: #ffffff; }
 .live-sidebar .brand { padding-bottom: 18px; }
 .live-role-banner { background: #f0f6f2; border: 1px solid #dbe6de; padding: 12px; border-radius: 10px; margin-bottom: 20px; }
@@ -166,6 +173,13 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 
 @media (max-width: 600px) {
+  .live-app-shell .topbar { padding: 8px 12px; height: auto; min-height: 59px; }
+  .live-app-shell .topbar-actions { gap: 6px; }
+  .live-app-shell .topbar-actions .topbar-action-btn { display: none; }
+  .live-app-shell .breadcrumbs { display: none; }
+  .live-app-shell .live-connection-pill { font-size: 10px; padding: 5px 8px; }
+  .live-app-shell .live-pagination { display: flex; flex-wrap: wrap; gap: 8px; }
+  .live-app-shell .section-header-row h2 { overflow-wrap: anywhere; }
   .live-workspace { padding: 16px 12px; }
   .live-page-content { padding: 16px 12px; }
   .live-auth-card { padding: 20px 16px; }

@@ -10,6 +10,9 @@ import type {
   SubscriptionResponse,
 } from '../../api/schema'
 import './subscriptions.css'
+import SubscriptionAddons from './SubscriptionAddons'
+import CreateSubscription from './CreateSubscription'
+import RecordHistory from '../live/RecordHistory'
 
 interface Props {
   id: string
@@ -34,9 +37,12 @@ export default function SubscriptionDetails({
   const [invoices, setInvoices] = useState<InvoiceSummaryListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [invoicePage, setInvoicePage] = useState(1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<PreparedMutation | null>(null)
 
   // Dialog state for actions requiring user parameters
   const [activeAction, setActiveAction] = useState<ActiveAction>(null)
@@ -49,7 +55,7 @@ export default function SubscriptionDetails({
 
     Promise.all([
       api.get<SubscriptionResponse>(`/subscriptions/${id}`, {}, controller.signal),
-      api.get<InvoiceSummaryListResponse>('/invoices', { subscription_id: id }, controller.signal),
+      api.get<InvoiceSummaryListResponse>('/invoices', { subscription_id: id, page: invoicePage }, controller.signal),
     ])
       .then(([subRes, invRes]) => {
         if (controller.signal.aborted) return
@@ -69,7 +75,7 @@ export default function SubscriptionDetails({
       })
 
     return () => controller.abort()
-  }, [id, revision, onExpired])
+  }, [id, revision, invoicePage, onExpired])
 
   async function executeLifecycleMutation(
     path: string,
@@ -81,9 +87,11 @@ export default function SubscriptionDetails({
     setError(null)
     setSuccess(null)
 
-    const action: PreparedMutation = api.prepare(path, 'POST', body, subscription.version)
+    const action: PreparedMutation = pendingAction ?? api.prepare(path, 'POST', body, subscription.version)
+    setPendingAction(action)
     try {
       await api.send<SubscriptionResponse>(action)
+      setPendingAction(null)
       setSuccess(successMessage)
       setActiveAction(null)
       setReason('')
@@ -92,6 +100,7 @@ export default function SubscriptionDetails({
       onChanged()
     } catch (failure) {
       if (failure instanceof ApiError) {
+        if (failure.status >= 400 && failure.status < 500 && failure.code !== 'REQUEST_IN_PROGRESS') setPendingAction(null)
         if (failure.status === 401) {
           onExpired()
           return
@@ -125,7 +134,7 @@ export default function SubscriptionDetails({
       void executeLifecycleMutation(
         `/subscriptions/${id}/pause`,
         { reason: reason.trim() },
-        'Subscription paused.'
+        'Pause scheduled for the eligible billing boundary.'
       )
     } else if (activeAction === 'close') {
       if (!reason.trim()) {
@@ -135,7 +144,7 @@ export default function SubscriptionDetails({
       void executeLifecycleMutation(
         `/subscriptions/${id}/close`,
         { reason: reason.trim() },
-        'Subscription closed.'
+        'Closure scheduled for the eligible billing boundary.'
       )
     } else if (activeAction === 'renew') {
       if (!newExpiryDate) {
@@ -161,6 +170,7 @@ export default function SubscriptionDetails({
 
   return (
     <section className="subscription-details-card" aria-label="Subscription details">
+      {editing && subscription && <CreateSubscription initial={subscription} onExpired={onExpired} onClose={() => setEditing(false)} onCreated={updated => { setSubscription(updated); setEditing(false); setRevision(v => v + 1); onChanged() }} />}
       <div className="subscription-details-header">
         <div>
           <h2>{subscription?.number ?? 'Subscription Details'}</h2>
@@ -188,7 +198,7 @@ export default function SubscriptionDetails({
           >
             Refresh
           </button>
-          <button disabled={busy} onClick={onClose}>
+          <button disabled={busy || !!pendingAction} onClick={onClose}>
             Close details
           </button>
         </div>
@@ -204,6 +214,7 @@ export default function SubscriptionDetails({
           <p>{success}</p>
         </div>
       )}
+      {pendingAction && !busy && <button onClick={() => void executeLifecycleMutation(pendingAction.path, JSON.parse(pendingAction.body), 'Subscription action completed.')}>Retry same subscription action</button>}
 
       {loading && !subscription ? (
         <p role="status">Loading subscription details…</p>
@@ -251,6 +262,8 @@ export default function SubscriptionDetails({
             </div>
           </div>
 
+          {subscription.capabilities.can_change_addons && <SubscriptionAddons subscription={subscription} onExpired={onExpired} onChanged={() => { setRevision(value => value + 1); onChanged() }} />}
+
           {/* Policy Snapshot */}
           {subscription.policy_snapshot && (
             <div className="policy-snapshot-box">
@@ -293,12 +306,13 @@ export default function SubscriptionDetails({
 
           {/* Action buttons (only displayed if capability exists or for authorized role actions) */}
           <div className="subscription-actions-bar">
+            {caps?.can_edit && role !== 'customer' && <button disabled={busy || !!pendingAction} onClick={() => setEditing(true)}>Edit draft</button>}
             <span className="action-heading">Lifecycle Actions:</span>
 
             {/* Quote Action */}
             {canQuote && (role === 'admin' || role === 'staff') && (
               <button
-                disabled={busy}
+                disabled={busy || !!pendingAction}
                 onClick={() => setActiveAction('quote')}
               >
                 Issue Quotation…
@@ -309,7 +323,7 @@ export default function SubscriptionDetails({
             {canConfirm && (role === 'admin' || role === 'staff') && (
               <button
                 className="primary-button"
-                disabled={busy}
+                disabled={busy || !!pendingAction}
                 onClick={() =>
                   void executeLifecycleMutation(
                     `/subscriptions/${id}/confirm`,
@@ -326,7 +340,7 @@ export default function SubscriptionDetails({
             {canActivate && (role === 'admin' || role === 'staff') && (
               <button
                 className="primary-button"
-                disabled={busy}
+                disabled={busy || !!pendingAction}
                 onClick={() =>
                   void executeLifecycleMutation(
                     `/subscriptions/${id}/activate`,
@@ -342,7 +356,7 @@ export default function SubscriptionDetails({
             {/* Pause Subscription */}
             {canPause && !subscription.is_paused && (
               <button
-                disabled={busy}
+                disabled={busy || !!pendingAction}
                 onClick={() => setActiveAction('pause')}
               >
                 Pause Subscription…
@@ -353,7 +367,7 @@ export default function SubscriptionDetails({
             {canResume && subscription.is_paused && (
               <button
                 className="primary-button"
-                disabled={busy}
+                disabled={busy || !!pendingAction}
                 onClick={() =>
                   void executeLifecycleMutation(
                     `/subscriptions/${id}/resume`,
@@ -369,7 +383,7 @@ export default function SubscriptionDetails({
             {/* Renew Subscription */}
             {canRenew && (
               <button
-                disabled={busy}
+                disabled={busy || !!pendingAction}
                 onClick={() => setActiveAction('renew')}
               >
                 Renew Contract…
@@ -380,7 +394,7 @@ export default function SubscriptionDetails({
             {canClose && subscription.status !== 'closed' && (
               <button
                 style={{ color: '#991b1b', borderColor: '#fecaca' }}
-                disabled={busy}
+                disabled={busy || !!pendingAction}
                 onClick={() => setActiveAction('close')}
               >
                 Close / Terminate…
@@ -414,7 +428,7 @@ export default function SubscriptionDetails({
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button type="button" onClick={() => setActiveAction(null)}>Cancel</button>
-                    <button className="primary-button" disabled={busy}>Submit Quotation</button>
+                    <button className="primary-button" disabled={busy || !!pendingAction}>Submit Quotation</button>
                   </div>
                 </form>
               )}
@@ -436,7 +450,7 @@ export default function SubscriptionDetails({
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button type="button" onClick={() => setActiveAction(null)}>Cancel</button>
-                    <button className="primary-button" disabled={busy}>Confirm Pause</button>
+                    <button className="primary-button" disabled={busy || !!pendingAction}>Confirm Pause</button>
                   </div>
                 </form>
               )}
@@ -458,7 +472,7 @@ export default function SubscriptionDetails({
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button type="button" onClick={() => setActiveAction(null)}>Cancel</button>
-                    <button style={{ background: '#991b1b', color: 'white' }} disabled={busy}>Confirm Close</button>
+                    <button style={{ background: '#991b1b', color: 'white' }} disabled={busy || !!pendingAction}>Confirm Close</button>
                   </div>
                 </form>
               )}
@@ -478,7 +492,7 @@ export default function SubscriptionDetails({
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button type="button" onClick={() => setActiveAction(null)}>Cancel</button>
-                    <button className="primary-button" disabled={busy}>Submit Renewal</button>
+                    <button className="primary-button" disabled={busy || !!pendingAction}>Submit Renewal</button>
                   </div>
                 </form>
               )}
@@ -541,8 +555,10 @@ export default function SubscriptionDetails({
           </div>
 
           {/* Related Invoices */}
+          <RecordHistory path={`/subscriptions/${id}/events`} title="Subscription history" revision={revision} onExpired={onExpired} />
           <div style={{ marginTop: 28 }}>
             <h3>Related Invoices</h3>
+            {invoices && <div><button disabled={invoicePage <= 1} onClick={() => setInvoicePage(v => v - 1)}>Previous invoices</button> <span>Page {invoicePage} of {Math.max(1, invoices.meta.total_pages)}</span> <button disabled={invoicePage >= invoices.meta.total_pages} onClick={() => setInvoicePage(v => v + 1)}>Next invoices</button></div>}
             {!invoices || invoices.data.length === 0 ? (
               <p style={{ color: '#586a60', fontStyle: 'italic' }}>
                 No invoices generated for this subscription yet.

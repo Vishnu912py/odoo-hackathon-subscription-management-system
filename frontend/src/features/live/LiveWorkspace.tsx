@@ -10,6 +10,9 @@ import type {
 } from '../../api/schema'
 import './live.css'
 import InvoiceDetails from './InvoiceDetails'
+import BillingRuns from './BillingRuns'
+import DirectoryManagement from '../catalog/DirectoryManagement'
+import RecordSelect from '../catalog/RecordSelect'
 import StaffManagement from './StaffManagement'
 import AuthView from './AuthView'
 import ProductsManagement from '../catalog/ProductsManagement'
@@ -99,8 +102,10 @@ interface RecordsProps {
 function Records({ session, page, selectedInvoiceId, onClearInvoiceId, onExpired }: RecordsProps) {
   const [pageNumber, setPageNumber] = useState(1)
   const [revision, setRevision] = useState(0)
-  const [range, setRange] = useState({ from: today().slice(0, 7) + '-01', to: today() })
+  const [range, setRange] = useState({ from: today().slice(0, 7) + '-01', to: today(), plan_id: '' })
   const [draftRange, setDraftRange] = useState(range)
+  const emptyFilters = { q: '', from: '', to: '', status: '', overdue: false }
+  const [filters, setFilters] = useState(emptyFilters), [draftFilters, setDraftFilters] = useState(emptyFilters)
   const [data, setData] = useState<OverviewResponse | InvoiceSummaryListResponse | PaymentListResponse | null>(null)
   const role = session.user.role
   const isPermitted = isPagePermittedForRole(page, role)
@@ -115,10 +120,11 @@ function Records({ session, page, selectedInvoiceId, onClearInvoiceId, onExpired
     const controller = new AbortController()
 
     const request = page === 'Overview'
-      ? api.get<OverviewResponse>(role === 'customer' ? '/portal/overview' : '/reports/overview', range, controller.signal)
+      ? api.get<OverviewResponse>(role === 'customer' ? '/portal/overview' : '/reports/overview', { ...range, plan_id: range.plan_id || undefined }, controller.signal)
       : api.get<InvoiceSummaryListResponse | PaymentListResponse>(
           `/${page.toLowerCase()}`,
-          { page: pageNumber, page_size: 20 },
+          { page: pageNumber, page_size: 20, q: filters.q || undefined, from: filters.from || undefined, to: filters.to || undefined,
+            ...(page === 'Invoices' ? { status: filters.status || undefined, overdue: filters.overdue || undefined } : {}) },
           controller.signal
         )
 
@@ -136,7 +142,7 @@ function Records({ session, page, selectedInvoiceId, onClearInvoiceId, onExpired
       })
 
     return () => controller.abort()
-  }, [page, pageNumber, revision, range, role, onExpired, isPermitted])
+  }, [page, pageNumber, revision, range, filters, role, onExpired, isPermitted])
 
   const meta = data && 'meta' in data ? data.meta : null
 
@@ -185,6 +191,14 @@ function Records({ session, page, selectedInvoiceId, onClearInvoiceId, onExpired
         </button>
       </div>
 
+      {page === 'Invoices' && role === 'admin' && <BillingRuns onExpired={onExpired} onChanged={() => setRevision(v => v + 1)} />}
+      {page !== 'Overview' && <form className="panel live-filters" onSubmit={event => { event.preventDefault(); startLoading(); setPageNumber(1); setFilters({ ...draftFilters }) }}>
+        <label>Search<input type="search" value={draftFilters.q} onChange={e => setDraftFilters({ ...draftFilters, q: e.target.value })} /></label>
+        <label>From date<input type="date" value={draftFilters.from} onChange={e => setDraftFilters({ ...draftFilters, from: e.target.value })} /></label>
+        <label>To date<input type="date" min={draftFilters.from} value={draftFilters.to} onChange={e => setDraftFilters({ ...draftFilters, to: e.target.value })} /></label>
+        {page === 'Invoices' && <><label>Status<select value={draftFilters.status} onChange={e => setDraftFilters({ ...draftFilters, status: e.target.value })}><option value="">All statuses</option>{['draft', 'confirmed', 'paid', 'cancelled'].map(status => <option key={status}>{status}</option>)}</select></label><label><input type="checkbox" checked={draftFilters.overdue} onChange={e => setDraftFilters({ ...draftFilters, overdue: e.target.checked })} /> Overdue only</label></>}
+        <button disabled={busy}>Apply filters</button><button type="button" disabled={busy} onClick={() => { startLoading(); setPageNumber(1); setDraftFilters(emptyFilters); setFilters(emptyFilters) }}>Clear filters</button>
+      </form>}
       {page === 'Overview' && (
         <form
           className="panel live-filters date-filter-panel"
@@ -200,6 +214,7 @@ function Records({ session, page, selectedInvoiceId, onClearInvoiceId, onExpired
           }}
         >
           <div className="filter-inputs">
+            <RecordSelect resource={role === 'customer' ? '/portal/plans' : '/plans'} label="Plan filter" value={draftRange.plan_id} onChange={plan_id => setDraftRange({ ...draftRange, plan_id })} />
             <div className="form-group">
               <label htmlFor="filter-from">From Date</label>
               <input
@@ -489,8 +504,9 @@ export default function LiveWorkspace() {
   const [signingOut, setSigningOut] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  const [invitation] = useState(() => new URLSearchParams(window.location.hash.slice(1)).has('invite'))
   const [resetToken, setResetToken] = useState(() =>
-    new URLSearchParams(window.location.hash.slice(1)).get('reset') ?? ''
+    new URLSearchParams(window.location.hash.slice(1)).get('reset') ?? new URLSearchParams(window.location.hash.slice(1)).get('invite') ?? ''
   )
 
   useEffect(() => {
@@ -576,6 +592,7 @@ export default function LiveWorkspace() {
             <ConnectionStatus />
           </header>
           <AuthView
+            invitation={invitation}
             resetToken={resetToken}
             onSession={newSession => {
               setSelectedInvoiceId(null)
@@ -720,7 +737,9 @@ export default function LiveWorkspace() {
           {activePage === 'Subscriptions' ? (
             <SubscriptionsManagement key={user.id} session={session}
               onSelectInvoice={id => { setSelectedInvoiceId(id); selectPage('Invoices') }} onExpired={expire} />
-          ) : activePage === 'Products' ? (
+            ) : activePage === 'Customers' || activePage === 'PaymentTerms' ? (
+              <DirectoryManagement key={activePage} kind={activePage === 'Customers' ? 'customers' : 'payment-terms'} onExpired={expire} />
+            ) : activePage === 'Products' ? (
             <ProductsManagement onExpired={expire} />
           ) : activePage === 'Plans' ? (
             <PlansManagement onExpired={expire} />

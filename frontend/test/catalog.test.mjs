@@ -34,7 +34,7 @@ test('admin-only catalog navigation includes all catalog tabs only for admin', (
 test('staff and customer restrictions prohibit catalog and staff navigation', () => {
   for (const role of ['staff', 'customer']) {
     const tabs = getAllowedTabsForRole(role)
-    assert.deepEqual([...tabs], BASE_TABS.filter(tab => role !== 'customer' || tab !== 'Payments'))
+    assert.deepEqual([...tabs], BASE_TABS.filter(tab => role !== 'customer' || (tab !== 'Payments' && tab !== 'Customers')))
 
     for (const catTab of CATALOG_ADMIN_TABS) {
       assert.equal(tabs.includes(catTab), false, `${role} must not see ${catTab}`)
@@ -45,7 +45,7 @@ test('staff and customer restrictions prohibit catalog and staff navigation', ()
 
     // Base tabs remain allowed
     for (const baseTab of BASE_TABS) {
-      assert.equal(isTabAllowedForRole(baseTab, role), !(role === 'customer' && baseTab === 'Payments'), `${role} must be allowed on ${baseTab}`)
+      assert.equal(isTabAllowedForRole(baseTab, role), !(role === 'customer' && (baseTab === 'Payments' || baseTab === 'Customers')), `${role} must be allowed on ${baseTab}`)
     }
   }
 })

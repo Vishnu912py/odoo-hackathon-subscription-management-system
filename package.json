@@ -1,0 +1,12 @@
+{
+  "name": "brightloop-subscription-management",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0 <25" },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "check": "npm --prefix backend run check && npm --prefix frontend run check",
+    "test:integration": "npm --prefix backend run test:integration"
+  }
+}

@@ -7,6 +7,10 @@ import type { MailTransport } from './accounts/mail.js';
 import { authentication, actor, type Actor } from './accounts/routes.js';
 import { recordPayment } from './billing/payments.js';
 import { getOverviewReport } from './reporting/report-persistence.js';
+import { catalogRouter, catalogOperations } from './catalog/routes.js';
+import { subscriptionRouter, subscriptionOperations } from './subscriptions/routes.js';
+import { reconcileSubscriptions } from './subscriptions/state.js';
+import { billingRouter, billingOperations } from './billing/routes.js';
 import { businessDate, day, Decimal, invoiceDetail, invoiceDetailInclude, invoiceInclude, invoiceSummary,
   paymentInclude, paymentView, subscriptionDetail, subscriptionInclude, subscriptionSummary } from './projections.js';
 
@@ -33,6 +37,8 @@ function order(q: Query, fallback = 'createdAt') {
 }
 function dates(q: Query) { return { ...(q.from ? { gte: new Date(String(q.from)) } : {}), ...(q.to ? { lte: new Date(String(q.to)) } : {}) }; }
 export const implemented = new Set([
+  'post /customers/{id}/invite', 'post /auth/accept-customer-invitation', 'get /portal/plans',
+  ...catalogOperations, ...subscriptionOperations, ...billingOperations,
   'get /auth/csrf', 'get /auth/me', 'post /auth/login', 'post /auth/register', 'post /auth/logout',
   'post /auth/forgot-password', 'post /auth/reset-password', 'get /staff', 'post /staff', 'get /staff/{id}', 'patch /staff/{id}',
   'get /subscriptions', 'get /subscriptions/{id}', 'get /invoices', 'get /invoices/{id}',
@@ -44,12 +50,25 @@ export function prototypeRouter(prisma: PrismaClient | undefined, config: Config
   if (!prisma) {
     for (const operation of implemented) {
       const [method, path] = operation.split(' ') as ['get' | 'post' | 'patch', string];
-      router[method](path.replace('{id}', ':id'), () => { throw new HttpError(503, 'DATABASE_UNAVAILABLE', 'Configure PostgreSQL before using this feature.'); });
+      router[method](path.replace(/\{([^}]+)\}/g, ':$1'), () => { throw new HttpError(503, 'DATABASE_UNAVAILABLE', 'Configure PostgreSQL before using this feature.'); });
     }
     return router;
   }
   const auth = authentication(prisma, config, transport);
   router.use(auth.router);
+  router.use(['/subscriptions', '/reports/overview', '/portal/overview'], auth.requireUser, async (_req, res, next) => {
+    await reconcileSubscriptions(prisma, businessDate(now()), scope(actor(res), {})); next();
+  });
+  router.use(catalogRouter(prisma, auth, now));
+  router.use(subscriptionRouter(prisma, auth, now));
+  router.use(billingRouter(prisma, auth, config, now));
+  router.get('/portal/plans', auth.requireUser, validateQuery('/portal/plans'), async (_req, res) => {
+    const user = actor(res), q = query(res);
+    if (user.role !== 'CUSTOMER') throw new HttpError(403, 'FORBIDDEN', 'Customer access required.');
+    const where = { subscriptions: { some: { customer: { userId: user.id } } }, ...(q.q ? { name: { contains: String(q.q), mode: 'insensitive' as const } } : {}) };
+    const [rows, total] = await prisma.$transaction([prisma.plan.findMany({ where, select: { id: true, name: true }, ...paging(q), orderBy: [{ name: q.sort_order === 'desc' ? 'desc' : 'asc' }, { id: 'asc' }] }), prisma.plan.count({ where })]);
+    res.json({ data: rows, meta: meta(q, total) });
+  });
   router.param('id', (_req, _res, next, id: string) => {
     if (!uuidPattern.test(id)) return next(new HttpError(404, 'NOT_FOUND', 'Record not found.'));
     next();
@@ -65,12 +84,12 @@ export function prototypeRouter(prisma: PrismaClient | undefined, config: Config
     };
     const [rows, total] = await prisma.$transaction([prisma.subscription.findMany({ where, include: subscriptionInclude, ...paging(q), orderBy: order(q) }),
       prisma.subscription.count({ where })], { isolationLevel: 'RepeatableRead' });
-    res.json({ data: rows.map(row => subscriptionSummary(row, businessDate(now()))), meta: meta(q, total) });
+    res.json({ data: rows.map(row => subscriptionSummary(row, businessDate(now()), user.role)), meta: meta(q, total) });
   });
   router.get('/subscriptions/:id', auth.requireUser, validateQuery('/subscriptions/{id}'), async (req, res) => {
     const row = await prisma.subscription.findFirst({ where: { id: String(req.params.id), ...scope(actor(res), {}) }, include: subscriptionInclude });
     if (!row) throw new HttpError(404, 'NOT_FOUND', 'Subscription not found.');
-    res.json({ data: subscriptionDetail(row, businessDate(now())) });
+    res.json({ data: subscriptionDetail(row, businessDate(now()), actor(res).role) });
   });
   router.get('/invoices', auth.requireUser, validateQuery('/invoices'), async (_req, res) => {
     const q = query(res), user = actor(res), today = businessDate(now());

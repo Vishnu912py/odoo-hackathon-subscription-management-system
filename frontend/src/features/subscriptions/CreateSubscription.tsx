@@ -1,10 +1,14 @@
+import VariantSelect from '../catalog/VariantSelect'
+import RecordSelect from '../catalog/RecordSelect'
+import RecordMultiSelect from '../catalog/RecordMultiSelect'
 import { useState, type FormEvent } from 'react'
 import { api, ApiError, errorMessage, type PreparedMutation } from '../../api/client'
-import type { SubscriptionInput, SubscriptionLineInput, SubscriptionResponse } from '../../api/schema'
+import type { Subscription, SubscriptionInput, SubscriptionLineInput, SubscriptionResponse } from '../../api/schema'
 import { normalizeDecimal, validateDecimal4 } from '../catalog/decimal'
 import './subscriptions.css'
 
 interface Props {
+  initial?: Subscription
   onClose: () => void
   onCreated: (newSub: SubscriptionResponse['data']) => void
   onExpired: () => void
@@ -12,18 +16,18 @@ interface Props {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-export default function CreateSubscription({ onClose, onCreated, onExpired }: Props) {
-  const [customerId, setCustomerId] = useState('')
-  const [planId, setPlanId] = useState('')
-  const [templateId, setTemplateId] = useState('')
-  const [paymentTermId, setPaymentTermId] = useState('')
+export default function CreateSubscription({ initial, onClose, onCreated, onExpired }: Props) {
+  const [customerId, setCustomerId] = useState(initial?.customer_id ?? '')
+  const [planId, setPlanId] = useState(initial?.plan_id ?? '')
+  const [templateId, setTemplateId] = useState(initial?.template_id ?? '')
+  const [paymentTermId, setPaymentTermId] = useState(initial?.payment_term_id ?? '')
   const [startDate, setStartDate] = useState(() =>
-    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    initial?.start_date ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   )
-  const [expiryDate, setExpiryDate] = useState('')
+  const [expiryDate, setExpiryDate] = useState(initial?.expiry_date ?? '')
 
   // Optional customized line items
-  const [lines, setLines] = useState<SubscriptionLineInput[]>([])
+  const [lines, setLines] = useState<SubscriptionLineInput[]>(initial?.lines.map(({ product_id, variant_id, quantity, unit_price, tax_ids }) => ({ product_id, variant_id, quantity, unit_price, tax_ids })) ?? [])
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +36,7 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
   function addLine() {
     setLines([
       ...lines,
-      { product_id: '', variant_id: null, quantity: '1.0000', unit_price: '100.0000', tax_ids: [] },
+      { product_id: '', variant_id: null, quantity: '1.0000' },
     ])
   }
 
@@ -104,7 +108,7 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
           variant_id: l.variant_id?.trim() || null,
           quantity: normQty,
           unit_price: normPrice,
-          tax_ids: l.tax_ids ?? [],
+          ...(l.tax_ids !== undefined ? { tax_ids: l.tax_ids } : {}),
         })
       }
     }
@@ -119,18 +123,19 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
       payment_term_id: trimmedTerm,
       start_date: startDate,
       expiry_date: expiryDate || null,
-      lines: validLines.length > 0 ? validLines : undefined,
+      lines: initial || validLines.length > 0 ? validLines : undefined,
     }
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    const payload = validate()
+    const payload = pending ? JSON.parse(pending.body) as SubscriptionInput : validate()
     if (!payload) return
 
     setBusy(true)
     setError(null)
-    const action = api.prepare('/subscriptions', 'POST', payload)
+    const { customer_id: _customer, template_id: _template, ...updates } = payload
+    const action = pending ?? (initial ? api.prepare(`/subscriptions/${initial.id}`, 'PATCH', updates, initial.version) : api.prepare('/subscriptions', 'POST', payload))
     setPending(action)
 
     try {
@@ -159,7 +164,7 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
     <div className="subscription-create-modal" aria-label="Create subscription quotation">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
-          <h3>Create New Quotation / Subscription</h3>
+          <h3>{initial ? 'Edit draft subscription' : 'Create New Quotation / Subscription'}</h3>
           <p style={{ margin: 0, color: '#586a60', fontSize: '0.88rem' }}>
             Assemble a customer agreement by associating a customer profile, subscription plan, payment term, and optional custom line items.
           </p>
@@ -189,49 +194,26 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
       <form onSubmit={handleSubmit}>
         <div className="catalog-form-grid">
           <div className="catalog-field">
-            <label>Customer UUID *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. 00000000-0000-0000-0000-000000000001"
-              value={customerId}
-              onChange={e => setCustomerId(e.target.value)}
-            />
+            <label>Customer *</label>
+            <RecordSelect resource="/customers" label="Customer" value={customerId} onChange={setCustomerId} disabled={!!initial} required />
             {formErrors.customerId && <span className="field-error">{formErrors.customerId}</span>}
           </div>
 
           <div className="catalog-field">
-            <label>Plan UUID *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. 00000000-0000-0000-0000-000000000002"
-              value={planId}
-              onChange={e => setPlanId(e.target.value)}
-            />
+            <label>Plan *</label>
+            <RecordSelect resource="/plans" label="Plan" value={planId} onChange={setPlanId} required />
             {formErrors.planId && <span className="field-error">{formErrors.planId}</span>}
           </div>
 
           <div className="catalog-field">
-            <label>Payment Term UUID *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. 00000000-0000-0000-0000-000000000003"
-              value={paymentTermId}
-              onChange={e => setPaymentTermId(e.target.value)}
-            />
+            <label>Payment term *</label>
+            <RecordSelect resource="/payment-terms" label="Payment term" value={paymentTermId} onChange={setPaymentTermId} required />
             {formErrors.paymentTermId && <span className="field-error">{formErrors.paymentTermId}</span>}
           </div>
 
           <div className="catalog-field">
-            <label>Template UUID (optional)</label>
-            <input
-              type="text"
-              placeholder="Optional template UUID"
-              value={templateId}
-              onChange={e => setTemplateId(e.target.value)}
-            />
+            <label>Template (optional)</label>
+            <RecordSelect resource="/quotation-templates" label="Template" value={templateId} onChange={setTemplateId} disabled={!!initial} />
             {formErrors.templateId && <span className="field-error">{formErrors.templateId}</span>}
           </div>
 
@@ -265,28 +247,17 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
             <button type="button" onClick={addLine}>+ Add Custom Line</button>
           </div>
           <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#586a60' }}>
-            If left empty, lines from the selected plan/template will be populated by the server.
+            {initial ? 'Changes replace the draft lines. At least one line is needed before issuing a quotation.' : 'If left empty, lines from the selected plan/template will be populated by the server.'}
           </p>
 
           {lines.map((l, idx) => (
             <div key={idx} className="line-item-row" style={{ gridTemplateColumns: '2fr 2fr 1fr 1fr auto' }}>
               <div>
-                <input
-                  type="text"
-                  required
-                  placeholder="Product UUID"
-                  value={l.product_id}
-                  onChange={e => updateLine(idx, { product_id: e.target.value })}
-                />
+                <RecordSelect resource="/products" label="Product" required value={l.product_id} onChange={value => updateLine(idx, { product_id: value, variant_id: null })} />
                 {formErrors[`line_prod_${idx}`] && <span className="field-error">{formErrors[`line_prod_${idx}`]}</span>}
               </div>
               <div>
-                <input
-                  type="text"
-                  placeholder="Variant UUID (optional)"
-                  value={l.variant_id ?? ''}
-                  onChange={e => updateLine(idx, { variant_id: e.target.value || null })}
-                />
+                <VariantSelect key={l.product_id} productId={l.product_id} value={l.variant_id ?? ""} onChange={value => updateLine(idx, { variant_id: value || null })} />
               </div>
               <div>
                 <input
@@ -308,6 +279,8 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
                 {formErrors[`line_price_${idx}`] && <span className="field-error">{formErrors[`line_price_${idx}`]}</span>}
               </div>
               <div>
+                <label><input type="checkbox" checked={l.tax_ids !== undefined} onChange={e => updateLine(idx, { tax_ids: e.target.checked ? [] : undefined })} /> Override product taxes</label>
+                {l.tax_ids !== undefined && <RecordMultiSelect resource="/taxes" label="Line taxes" value={l.tax_ids.join(',')} onChange={value => updateLine(idx, { tax_ids: value.split(',').map(v => v.trim()).filter(Boolean) })} />}
                 <button
                   type="button"
                   onClick={() => removeLine(idx)}
@@ -325,7 +298,7 @@ export default function CreateSubscription({ onClose, onCreated, onExpired }: Pr
             Cancel
           </button>
           <button className="primary-button" disabled={busy}>
-            {busy ? 'Submitting…' : 'Create Quotation'}
+            {busy ? 'Submitting…' : initial ? 'Save draft changes' : 'Create draft subscription'}
           </button>
         </div>
       </form>

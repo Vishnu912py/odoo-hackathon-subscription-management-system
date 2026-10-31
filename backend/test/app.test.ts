@@ -64,7 +64,7 @@ test('malformed JSON, oversized bodies and unsupported media fail explicitly', a
   assert.equal(media.body.error.code, 'UNSUPPORTED_MEDIA_TYPE');
 });
 
-test('without a database implemented operations fail closed and pending operations remain explicit 501', async () => {
+test('all contract operations are implemented and fail closed without a database', async () => {
   const app = makeApp();
   const contract = loadContract();
   let checked = 0;
@@ -74,6 +74,7 @@ test('without a database implemented operations fail closed and pending operatio
       if (!operation) continue;
       const url = '/api/v1'+path.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-000000000001');
       const { implemented } = await import('../src/modules/prototype.js');
+      assert.ok(implemented.has(`${method} ${path}`), `Missing implementation: ${method} ${path}`);
       if (implemented.has(`${method} ${path}`)) {
         const unavailable = await request(app)[method](url).expect(503);
         assert.equal(unavailable.body.error.code, 'DATABASE_UNAVAILABLE');
@@ -87,7 +88,7 @@ test('without a database implemented operations fail closed and pending operatio
       checked++;
     }
   }
-  assert.equal(checked, 68);
+  assert.equal(checked, 75);
 });
 
 test('unknown endpoints return JSON 404 and OpenAPI is development-only', async () => {

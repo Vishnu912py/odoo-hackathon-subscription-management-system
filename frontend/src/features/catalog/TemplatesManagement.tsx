@@ -1,3 +1,5 @@
+import RecordSelect from './RecordSelect'
+import VariantSelect from './VariantSelect'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError, errorMessage, type PreparedMutation } from '../../api/client'
 import type { Template, TemplateInput, TemplateLineInput, TemplateListResponse, TemplateResponse, TemplateUpdate } from '../../api/schema'
@@ -311,14 +313,8 @@ export default function TemplatesManagement({ onExpired }: Props) {
               </div>
 
               <div className="catalog-field">
-                <label>Base Plan UUID *</label>
-                <input
-                  type="text"
-                  required
-                  value={planId}
-                  onChange={e => setPlanId(e.target.value)}
-                  placeholder="UUID of base subscription plan"
-                />
+                <label>Base plan *</label>
+                <RecordSelect resource="/plans" label="Plan" required value={planId} onChange={setPlanId} />
                 {formErrors.planId && <span className="field-error">{formErrors.planId}</span>}
               </div>
 
@@ -358,22 +354,11 @@ export default function TemplatesManagement({ onExpired }: Props) {
               {lines.map((line, idx) => (
                 <div key={idx} className="line-item-row" style={{ gridTemplateColumns: '2fr 2fr 1fr 1fr auto' }}>
                   <div>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Product UUID"
-                      value={line.product_id}
-                      onChange={e => updateLine(idx, { product_id: e.target.value })}
-                    />
+                    <RecordSelect resource="/products" label="Product" required value={line.product_id} onChange={value => updateLine(idx, { product_id: value, variant_id: null })} />
                     {formErrors[`prod_${idx}`] && <span className="field-error">{formErrors[`prod_${idx}`]}</span>}
                   </div>
                   <div>
-                    <input
-                      type="text"
-                      placeholder="Variant UUID (optional)"
-                      value={line.variant_id ?? ''}
-                      onChange={e => updateLine(idx, { variant_id: e.target.value || null })}
-                    />
+                    <VariantSelect key={line.product_id} productId={line.product_id} value={line.variant_id ?? ""} onChange={value => updateLine(idx, { variant_id: value || null })} />
                   </div>
                   <div>
                     <input

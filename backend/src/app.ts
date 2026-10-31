@@ -10,6 +10,7 @@ import { createApiRouter } from './modules/index.js';
 import { prototypeRouter } from './modules/prototype.js';
 import { timingSafeEqual } from 'node:crypto';
 import { deliverMail, type MailTransport } from './modules/accounts/mail.js';
+import { processBilling, deliverInvoices } from './modules/billing/worker.js';
 
 export interface AppDependencies {
   database: Database;
@@ -38,11 +39,17 @@ export function createApp(config: Config, dependencies: AppDependencies) {
     exposedHeaders: ['X-Request-Id'],
   }));
   app.use(express.json({ limit: '100kb', strict: true }));
-  app.get('/api/internal/auth-maintenance', async (req, res) => {
+  app.get(['/api/internal/auth-maintenance', '/api/internal/billing-maintenance'], async (req, res) => {
     const expected = `Bearer ${config.cronSecret ?? ''}`, supplied = req.get('authorization') ?? '';
     if (!config.cronSecret || Buffer.byteLength(expected) !== Buffer.byteLength(supplied) || !timingSafeEqual(Buffer.from(expected), Buffer.from(supplied))) throw new HttpError(401, 'UNAUTHENTICATED', 'Invalid maintenance credential.');
     const prisma = dependencies.database.prisma;
     if (!prisma) throw new HttpError(503, 'DATABASE_UNAVAILABLE', 'Database unavailable.');
+    if (req.path.endsWith('/billing-maintenance')) {
+      await processBilling(prisma, config, dependencies.now?.());
+      await deliverInvoices(prisma, config, dependencies.mailTransport);
+      await deliverMail(prisma, config, dependencies.mailTransport);
+      res.json({ data: { message: 'Billing maintenance pass completed.' } }); return;
+    }
     await deliverMail(prisma, config, dependencies.mailTransport);
     await prisma.session.deleteMany({ where: { OR: [{ expiresAt: { lte: new Date() } }, { createdAt: { lte: new Date(Date.now() - 7 * 86_400_000) } }] } });
     await prisma.authRateLimit.deleteMany({ where: { expiresAt: { lte: new Date() } } });

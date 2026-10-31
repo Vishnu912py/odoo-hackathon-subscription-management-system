@@ -1,5 +1,7 @@
 # Brightloop API contracts v0.1
 
+> Current checkout update (31 October 2026): all 68 API operations are integrated. See [the product guide](integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; deployment and real-email acceptance remain separate checks.
+
 Implementation owner: **Vishnu912py**. Frontend consumer: **albinsavi123-lang**. Persistence owner: **Zenfox-690**.
 
 This is the shared implementation baseline for React + TypeScript, Express + TypeScript and PostgreSQL. **No API server or database migrations are implemented by these files.** API shapes below are the target for initial development. Business policies marked as proposed defaults are engineering decisions made for this handoff, not additional requirements from the problem statement or claims of prior team approval.

@@ -1,3 +1,4 @@
+import RecordMultiSelect from './RecordMultiSelect'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError, errorMessage, type PreparedMutation } from '../../api/client'
 import type { Discount, DiscountInput, DiscountListResponse, DiscountResponse, DiscountUpdate } from '../../api/schema'
@@ -233,8 +234,8 @@ export default function DiscountsManagement({ onExpired }: Props) {
       value: normVal!,
       currency: discountType === 'fixed' ? 'INR' : null,
       scope,
-      product_ids: pIds,
-      subscription_ids: sIds,
+      product_ids: scope === 'product' ? pIds : [],
+      subscription_ids: scope === 'subscription' ? sIds : [],
       minimum_purchase: normMinPurchase,
       minimum_quantity: normMinQty,
       valid_from: validFrom,
@@ -427,14 +428,8 @@ export default function DiscountsManagement({ onExpired }: Props) {
               </div>
 
               <div className="catalog-field full-width">
-                <label>Eligible Product UUIDs (comma-separated, optional)</label>
-                <input
-                  type="text"
-                  disabled={Boolean(editingDiscount)}
-                  value={productIds}
-                  onChange={e => setProductIds(e.target.value)}
-                  placeholder="UUIDs"
-                />
+                <label>Eligible products</label>
+                {scope === 'product' ? <RecordMultiSelect resource="/products" label="Eligible products" value={productIds} onChange={setProductIds} disabled={Boolean(editingDiscount)} /> : <RecordMultiSelect resource="/subscriptions" label="Eligible subscriptions" value={subscriptionIds} onChange={setSubscriptionIds} disabled={Boolean(editingDiscount)} />}
               </div>
 
               <div className="catalog-field">

@@ -1,3 +1,4 @@
+import RecordSelect from './RecordSelect'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError, errorMessage, type PreparedMutation } from '../../api/client'
 import type { Plan, PlanInput, PlanListResponse, PlanProductInput, PlanResponse, PlanUpdate } from '../../api/schema'
@@ -491,13 +492,7 @@ export default function PlansManagement({ onExpired }: Props) {
               {planProducts.map((item, idx) => (
                 <div key={idx} className="line-item-row">
                   <div>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Product UUID"
-                      value={item.product_id}
-                      onChange={e => updateProductRow(idx, { product_id: e.target.value })}
-                    />
+                    <RecordSelect resource="/products" label="Product" required value={item.product_id} onChange={value => updateProductRow(idx, { product_id: value })} />
                     {formErrors[`product_${idx}`] && <span className="field-error">{formErrors[`product_${idx}`]}</span>}
                   </div>
                   <div>

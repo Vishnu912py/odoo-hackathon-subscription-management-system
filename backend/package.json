@@ -8,13 +8,13 @@
     "node": ">=24.0.0 <25"
   },
   "scripts": {
-    "predev": "npm run prisma:generate",
+    "predev": "node scripts/prepare_build.mjs && npm run prisma:generate",
     "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "build": "node scripts/prepare_build.mjs && prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
-    "typecheck": "prisma generate && tsc --noEmit",
-    "test": "prisma generate && tsx --test test/*.test.ts",
-    "check": "prisma validate && prisma generate && tsc --noEmit && tsx --test test/*.test.ts && tsc -p tsconfig.build.json",
+    "typecheck": "node scripts/prepare_build.mjs && prisma generate && tsc --noEmit",
+    "test": "node scripts/prepare_build.mjs && prisma generate && tsx --test test/*.test.ts",
+    "check": "node scripts/prepare_build.mjs && prisma validate && prisma generate && tsc --noEmit && tsx --test test/*.test.ts && tsc -p tsconfig.build.json",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -24,9 +24,12 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "test:db": "tsx scripts/test_db_constraints.ts",
     "test:verify": "python scripts/verify_schema_integrity.py",
+    "pretest:integration": "node scripts/prepare_build.mjs && prisma generate",
     "test:integration": "tsx --test test/integration/*.test.ts",
     "admin:create": "tsx scripts/create_admin.ts",
-    "mail:deliver": "tsx scripts/auth_mail_worker.ts"
+    "mail:deliver": "tsx scripts/auth_mail_worker.ts",
+    "billing:run": "tsx scripts/billing_worker.ts",
+    "billing:watch": "tsx scripts/billing_worker.ts --watch"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
@@ -37,12 +40,14 @@
     "dotenv": "18.0.9",
     "express": "5.3.0",
     "helmet": "8.3.0",
+    "pdfkit": "0.17.2",
     "pg": "8.23.1"
   },
   "devDependencies": {
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/node": "24.19.2",
+    "@types/pdfkit": "0.17.3",
     "@types/pg": "8.23.1",
     "@types/supertest": "7.2.1",
     "prisma": "7.10.1",

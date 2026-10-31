@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+**/.env*
+tmp
+output
+backend/test
+backend/src/generated
+frontend/test
+*.log

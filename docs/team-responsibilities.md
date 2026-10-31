@@ -1,5 +1,7 @@
 # Team responsibilities
 
+> Current checkout update (31 October 2026): all 68 API operations are integrated. See [the product guide](integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; deployment and real-email acceptance remain separate checks.
+
 Confirmed by Vishnu: `Zenfox-690` specializes in databases; `albinsavi123-lang` specializes in frontend. This document defines the team's assignments; GitHub issue assignments and collaborator notifications are managed separately.
 
 Status reviewed on 31 October 2026 against merged main (998c6a8). Checked work packages are delivered; unchecked packages may contain completed subtasks. See the [README checklist](../README.md) for evidence and the newer prototype scope in [prototype v1](prototype-v1.md).

@@ -129,6 +129,11 @@ export class ApiClient {
     this.csrfToken = undefined
     return result
   }
+  async acceptInvitation(token: string, password: string) {
+    const result = await this.auth<{ data: { message: string } }>('accept-customer-invitation', { token, password })
+    this.csrfToken = undefined
+    return result
+  }
 
   async logout(): Promise<void> {
     await this.auth<void>('logout', {})

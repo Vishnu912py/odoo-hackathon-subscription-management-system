@@ -1,12 +1,11 @@
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import formats from 'ajv-formats';
-import { createRequire } from 'node:module';
 import type { RequestHandler } from 'express';
 import { loadContract } from '../contracts.js';
 import { HttpError } from './errors.js';
 
 // OpenAPI's JSON Schema definitions are also the runtime validation source.
-const addFormats = createRequire(import.meta.url)('ajv-formats') as typeof formats.default;
+const addFormats = formats as unknown as typeof formats.default;
 const ajv = new Ajv2020({ strict: false, allErrors: true });
 addFormats(ajv);
 const contract = loadContract() as unknown as {

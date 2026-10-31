@@ -4,9 +4,9 @@ Build a unified platform for Brightloop Software to manage products, recurring p
 
 ## Implementation status
 
-The integrated prototype uses React/TypeScript, Express/TypeScript, PostgreSQL and Prisma 7. On `main`, **20 contract operations** implement authentication, staff management, owned subscription/invoice/payment reads, payment recording and reporting. Zenfox's billing persistence functions are also merged; catalog/lifecycle/billing HTTP orchestration and invoice delivery/printing remain incomplete. See [prototype setup](docs/prototype-v1.md) and [authentication/deployment setup](docs/authentication-v1.md).
+The current checkout integrates React/TypeScript, Express/TypeScript, PostgreSQL and Prisma 7 into a runnable subscription product. All **68 contract operations** have handlers, including catalog, lifecycle, scheduled billing, invoice actions/PDF/email, payments and reporting. Run **`npm run dev` from the repository root** after database/dependency setup to start the API, UI and billing worker together.
 
-This is an integrated prototype, not completion of all R01–R12 requirements. A completed UI or persistence module does not by itself establish a working end-to-end feature.
+See [integrated product setup and verification](docs/integrated-product.md) for the complete workflow, fresh checks, local browser/performance evidence and remaining external release checks. Hosted deployment and live inbox delivery are not yet verified. The dated team checklist below is historical and does not supersede the current integration guide.
 
 <a id="foundation-checklist--31-october-2026"></a>
 

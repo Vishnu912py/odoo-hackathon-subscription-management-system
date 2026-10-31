@@ -7,6 +7,7 @@ import { validateBody, validateQuery } from '../../http/validation.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 import type { MailTransport } from './mail.js';
 import { recoveryRouter } from './recovery.js';
+import { customerPortalRouter } from './customer-portal.js';
 
 const cookieName = 'brightloop_session';
 const lifetime = 24 * 60 * 60 * 1000;
@@ -126,5 +127,6 @@ export function authentication(prisma: PrismaClient, config: Config, transport?:
     res.clearCookie(cookieName, cookieOptions).status(204).end();
   });
   router.use(recoveryRouter(prisma, config, { requireUser, csrf, limit }, transport));
+  router.use(customerPortalRouter(prisma, config, { requireUser, staff, csrf, limit }, transport));
   return { router, requireUser, csrf, staff };
 }

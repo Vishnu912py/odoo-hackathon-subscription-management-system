@@ -9,6 +9,7 @@ export type AuthMode = 'login' | 'register' | 'forgot' | 'reset'
 interface AuthViewProps {
   initialMode?: AuthMode
   resetToken?: string
+  invitation?: boolean
   onSession: (session: Session) => void
   onResetComplete?: () => void
 }
@@ -16,6 +17,7 @@ interface AuthViewProps {
 export default function AuthView({
   initialMode = 'login',
   resetToken = '',
+  invitation = false,
   onSession,
   onResetComplete,
 }: AuthViewProps) {
@@ -108,7 +110,7 @@ export default function AuthView({
     setBusy(true)
     setError(null)
     try {
-      const result = await api.resetPassword(resetToken, password)
+      const result = await (invitation ? api.acceptInvitation(resetToken, password) : api.resetPassword(resetToken, password))
       setSuccessMessage(result.data.message)
       setPassword('')
       setConfirmPassword('')
@@ -131,13 +133,13 @@ export default function AuthView({
             {mode === 'login' && 'Sign in to RevOps Shield'}
             {mode === 'register' && 'Create customer account'}
             {mode === 'forgot' && 'Password recovery & setup'}
-            {mode === 'reset' && 'Set account password'}
+            {mode === 'reset' && (invitation ? 'Activate customer portal' : 'Set account password')}
           </h2>
           <p className="auth-subtitle">
             {mode === 'login' && 'Enter your credentials to access your workspace or customer portal.'}
             {mode === 'register' && 'Register a customer account with self-service billing access.'}
             {mode === 'forgot' && 'Request a password reset link or re-send an expired staff invitation link.'}
-            {mode === 'reset' && 'Choose a secure new password for your RevOps Shield account.'}
+            {mode === 'reset' && (invitation ? 'Choose a password for your new account. If you already registered, enter your current password to link this billing profile.' : 'Choose a secure new password for your RevOps Shield account.')}
           </p>
         </div>
       </div>
@@ -438,7 +440,7 @@ export default function AuthView({
       )}
 
       {/* Development accounts guide */}
-      <div className="auth-dev-callout">
+      {import.meta.env.DEV && <div className="auth-dev-callout">
         <strong>Demo Development Accounts:</strong>
         <div className="dev-accounts-grid">
           <div><code>admin@brightloop.io</code><span>Admin role</span></div>
@@ -446,7 +448,7 @@ export default function AuthView({
           <div><code>billing@acmestudio.com</code><span>Customer role</span></div>
         </div>
         <small>Password: <code>BrightloopDemo!2026</code> (Local development database only)</small>
-      </div>
+      </div>}
     </section>
   )
 }

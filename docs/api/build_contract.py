@@ -257,6 +257,10 @@ def listing(path, name, roles, filters=None, sort_fields=("created_at",), descri
 AS = ["admin", "staff"]
 ALL = ["admin", "staff", "customer"]
 ADMIN = ["admin"]
+define('CustomerInvitationInput', {'token': text(pattern='^[a-f0-9]{64}$'), 'password': PASSWORD})
+define('InvoiceDelivery', {'id': ID, 'invoice_id': ID, 'recipient': EMAIL, 'status': enum('pending', 'failed', 'sent', 'cancelled'),
+    'attempts': integer(), 'last_attempt_at': nullable(TIME), 'sent_at': nullable(TIME), 'error': nullable(NOTE), 'created_at': TIME})
+define('PlanOption', {'id': ID, 'name': NAME})
 op('/auth/csrf', 'get', 'getCsrf', 'Get CSRF token', ['public'], 'Csrf', public=True, description='Sets anonymous session if absent. Safe and idempotent; no user data. Cache-Control: no-store.')
 op('/auth/register', 'post', 'register', 'Register customer account', ['public'], 'User', 'RegisterInput', 201, public=True, description='Creates customer user/profile atomically, never staff/admin. Does not sign in. Never links an existing customer by matching billing_email alone.')
 op('/auth/login', 'post', 'login', 'Sign in', ['public'], 'Session', 'LoginInput', public=True, description='Rotate session and CSRF token. Set HttpOnly session cookie; return no bearer token. Inactive users denied.')
@@ -272,7 +276,9 @@ def resource(path, name, input_name, update_name, read_roles, write_roles=ADMIN,
     op(path+'/{id}', 'patch', 'update'+name, 'Update '+name, write_roles, name, update_name, version=True, description='PATCH provided fields only; arrays replace complete collections. Omitted values unchanged; explicit null only where nullable. '+desc)
 
 resource('/staff', 'Staff', 'StaffInput', 'StaffUpdate', ADMIN, desc='Admin only. Create a pending staff invitation; send single-use password setup email. Invitation never returns a password or token. Staff cannot grant roles.')
-resource('/customers', 'Customer', 'CustomerInput', 'CustomerUpdate', AS, AS, desc='Staff-created customer has user_id null. Linking to an existing login requires a separate verified process, outside v1.')
+resource('/customers', 'Customer', 'CustomerInput', 'CustomerUpdate', AS, AS, desc='Staff-created customer has user_id null. Portal ownership requires single-use email invitation verification.')
+op('/customers/{id}/invite', 'post', 'inviteCustomer', 'Invite customer to portal', AS, 'Message', 'EmptyInput', 202, version=True, description='Email an expiring single-use link to the current billing email. Never return the token. Reissuing invalidates older invitations. Linked customers cannot be invited.')
+op('/auth/accept-customer-invitation', 'post', 'acceptCustomerInvitation', 'Accept verified customer invitation', ['public'], 'Message', 'CustomerInvitationInput', public=True, description='Consume the emailed token. New users choose a password; existing customer users must supply their current password. Only an empty existing signup profile may be replaced. Existing business records are never silently reassigned.')
 resource('/products', 'Product', 'ProductInput', 'ProductUpdate', AS, filters={"is_active": BOOL}, desc='Staff projection must omit cost_price. No customer access. PATCH is_active=false archives; no hard delete.')
 op('/products/{id}/variants', 'post', 'createVariant', 'Create product variant', ADMIN, 'Variant', 'VariantInput', 201)
 op('/products/{id}/variants/{variant_id}', 'patch', 'updateVariant', 'Update product variant', ADMIN, 'Variant', 'VariantUpdate', version=True, description='If-Match refers to variant version. Verify variant belongs to path product. Existing subscription prices remain snapshots.')
@@ -310,12 +316,17 @@ listing('/invoices/{id}/payments', 'Payment', ALL, sort_fields=('payment_date',)
 listing('/payments', 'Payment', AS, {"invoice_id": ID, "customer_id": ID, "from": DATE, "to": DATE}, ('payment_date', 'created_at'), 'from/to inclusive payment dates.')
 op('/billing-runs', 'post', 'createBillingRun', 'Queue due-period billing run', ADMIN, 'BillingRun', 'BillingRunInput', 202, description='Persist run before acknowledgement; worker processes each subscription period transactionally. Repeated key returns same run. Scheduler invokes the same service internally, not browser credentials.')
 op('/billing-runs/{id}', 'get', 'getBillingRun', 'Poll billing run', ADMIN, 'BillingRun')
+listing('/billing-runs', 'BillingRun', ADMIN, description='Persistent billing history, newest first. q matches run UUID.')
+op('/billing-runs/{id}/retry', 'post', 'retryBillingRun', 'Retry incomplete billing work', ADMIN, 'BillingRun', 'EmptyInput', 202, description='Create a fresh durable run with the original cutoff and subscription scope. Period uniqueness prevents duplicate invoices. Completed successful runs cannot be retried.')
+listing('/invoices/{id}/deliveries', 'InvoiceDelivery', AS, description='Invoice email delivery attempts and sanitized errors. q matches recipient.')
+op('/invoices/{id}/deliveries/{delivery_id}/retry', 'post', 'retryInvoiceDelivery', 'Retry failed invoice delivery', AS, 'InvoiceDelivery', 'EmptyInput', 202, description='Requeue a failed delivery only. Sent jobs cannot be retried; use Send for an intentional resend.')
+listing('/portal/plans', 'PlanOption', ['customer'], sort_fields=('name',), description='Only plans referenced by the signed-in customer subscriptions, for filtering owned reports.')
 report_params=[param('from', DATE, required=True), param('to', DATE, required=True), param('plan_id', ID)]
 op('/reports/overview', 'get', 'getOverview', 'Get business overview', AS, 'Overview', params=report_params, description='See integration guide for period versus current-balance semantics. Inclusive date range <=366 days; from<=to<=business today.')
 op('/portal/overview', 'get', 'getPortalOverview', 'Get own account overview', ['customer'], 'Overview', params=report_params, description='Same metrics restricted to own customer; no global figures. Details use shared ownership-protected subscription/invoice endpoints.')
 
 SPEC = {"openapi": "3.1.0", "info": {"title": "Brightloop Subscription API", "version": "0.1.0",
-    "description": "Contract-first implementation baseline. No API server exists yet. Shapes are normative for initial implementation; new business defaults are proposed MVP choices in docs/api-contracts.md. Generated by build_contract.py."},
+    "description": "Implemented Brightloop REST API. Shared contracts and confirmed business policies are documented in docs/api-contracts.md. Generated by build_contract.py."},
     "servers": [{"url": "http://localhost:3000/api/v1", "description": "Proposed Express development address; no server is started by this file"}, {"url": "/api/v1", "description": "Same-origin proxy/production"}],
     "security": [{"sessionCookie": []}], "paths": PATHS,
     "components": {"securitySchemes": {"sessionCookie": {"type": "apiKey", "in": "cookie", "name": "brightloop_session", "description": "Opaque server session. HttpOnly; Secure in HTTPS; SameSite=Lax; Path=/. Never localStorage."}}, "schemas": SCHEMAS}}

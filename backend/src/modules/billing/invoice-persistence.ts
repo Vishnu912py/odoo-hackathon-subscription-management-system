@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient, type Invoice, type InvoiceStatus } from '../../generated/prisma/client.js';
+import { randomUUID } from 'node:crypto';
 import { evaluateAndLockEligibleDiscount, type DiscountableLine } from './discount-persistence.js';
 
 const Decimal = Prisma.Decimal;
@@ -12,6 +13,7 @@ export interface CreateInvoiceParams {
   invoiceNumber?: string;
   actorUserId?: string | null;
   advanceSchedule?: boolean;
+  initialStatus?: 'DRAFT' | 'CONFIRMED';
 }
 
 export interface CreateInvoiceResult {
@@ -76,6 +78,13 @@ export async function createSubscriptionInvoice(
   }
 
   const executeInTransaction = async (tx: Prisma.TransactionClient): Promise<CreateInvoiceResult> => {
+    // The same aggregate row lock is used by lifecycle/add-on mutations.
+    await tx.subscription.updateMany({ where: { id: subscriptionId }, data: { version: { increment: 0 } } });
+    const agreement = await tx.subscription.findUniqueOrThrow({ where: { id: subscriptionId } });
+    const stops = [agreement.expiryDate, agreement.closeEffectiveDate].filter((d): d is Date => d !== null);
+    const stop = stops.sort((a, b) => a.getTime() - b.getTime())[0];
+    if (stop && (pStart >= stop || pEnd > stop)) throw new Error('Billing period is outside the subscription agreement.');
+    const nextSchedule = stop && pEnd >= stop ? null : pEnd;
     // 1. Acquire transaction-scoped advisory lock for this subscription and period
     const lockKey = `sub_inv:${subscriptionId}:${pStart.toISOString().split('T')[0]}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
@@ -97,12 +106,9 @@ export async function createSubscriptionInvoice(
         await tx.subscription.updateMany({
           where: {
             id: subscriptionId,
-            OR: [
-              { nextBillingDate: null },
-              { nextBillingDate: { lt: nextDate } },
-            ],
+            nextBillingDate: { lt: nextDate },
           },
-          data: { nextBillingDate: nextDate },
+          data: { nextBillingDate: nextSchedule },
         });
       }
       return { invoice: existing, isReused: true };
@@ -136,7 +142,7 @@ export async function createSubscriptionInvoice(
       throw new Error(`Subscription ${subscriptionId} not found.`);
     }
 
-    if (sub.status !== 'ACTIVE' && sub.status !== 'CONFIRMED') {
+    if (sub.status !== 'ACTIVE' && sub.status !== 'CONFIRMED' && !(sub.status === 'CLOSED' && stop && pStart < stop)) {
       throw new Error(`Subscription ${subscriptionId} has status ${sub.status}; only ACTIVE or CONFIRMED subscriptions can be billed.`);
     }
 
@@ -265,7 +271,7 @@ export async function createSubscriptionInvoice(
     const dueDays = sub.dueDaysSnapshot ?? sub.paymentTerm?.dueDays ?? 15;
     const dueDate = pDueRaw ? new Date(pDueRaw) : new Date(issueDate.getTime() + dueDays * 86_400_000);
 
-    const generatedNumber = invoiceNumber || `INV-${Date.now().toString().slice(-7)}-${Math.floor(Math.random() * 900 + 100)}`;
+    const generatedNumber = invoiceNumber || `INV-${randomUUID()}`;
 
     // 9. Snapshot customer details
     const customerNameSnapshot = sub.customer.name;
@@ -281,7 +287,7 @@ export async function createSubscriptionInvoice(
         periodEnd: pEnd,
         issueDate,
         dueDate,
-        status: 'CONFIRMED',
+          status: params.initialStatus ?? 'CONFIRMED',
         currency: sub.currency,
         customerNameSnapshot,
         billingEmailSnapshot,
@@ -361,12 +367,9 @@ export async function createSubscriptionInvoice(
       await tx.subscription.updateMany({
         where: {
           id: sub.id,
-          OR: [
-            { nextBillingDate: null },
-            { nextBillingDate: { lt: nextDate } },
-          ],
+          nextBillingDate: { lt: nextDate },
         },
-        data: { nextBillingDate: nextDate },
+        data: { nextBillingDate: nextSchedule },
       });
     }
 

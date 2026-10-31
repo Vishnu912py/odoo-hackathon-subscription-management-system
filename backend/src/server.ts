@@ -12,7 +12,7 @@ const app = createApp(config, {
 const server = app.listen(config.port, config.host, (error?: Error) => {
   if (error) return;
   console.info(`Brightloop backend listening at http://${config.host}:${config.port}`);
-  console.info('Prototype v1: auth, owned records, reports and payment recording; other operations return 501.');
+  console.info('Subscription management API ready. Run the billing worker to process queued billing and email jobs.');
 });
 server.on('error', () => {
   console.error('HTTP server could not start. Check HOST/PORT and whether the port is already in use.');

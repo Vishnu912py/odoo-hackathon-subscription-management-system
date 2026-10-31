@@ -27,6 +27,7 @@ export function getNavigationItems(role: 'admin' | 'staff' | 'customer'): Naviga
   ]
   if (role === 'admin' || role === 'staff') {
     items.push({ id: 'Payments', label: 'Payments', icon: '⇄', desc: 'Payment receipts & reconciliation' })
+    items.push({ id: 'Customers', label: 'Customers', icon: '◉', desc: 'Customer billing profiles' })
   }
   if (role === 'admin') {
     items.push(
@@ -35,6 +36,7 @@ export function getNavigationItems(role: 'admin' | 'staff' | 'customer'): Naviga
       { id: 'Taxes', label: 'Taxes', icon: '▤', desc: 'Taxes configuration' },
       { id: 'Discounts', label: 'Discounts', icon: '▤', desc: 'Discounts configuration' },
       { id: 'Templates', label: 'Templates', icon: '▤', desc: 'Templates configuration' },
+      { id: 'PaymentTerms', label: 'Payment terms', icon: '▤', desc: 'Invoice due-date terms' },
     )
     items.push({ id: 'Staff', label: 'Staff Management', icon: '👥', desc: 'Manage staff accounts & invitations' })
   }

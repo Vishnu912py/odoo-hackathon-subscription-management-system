@@ -19,7 +19,9 @@ export function invoiceSummary(row: InvoiceRow, role: string, today: string) {
     subtotal: row.subtotal.toFixed(2), discount_total: row.discountTotal.toFixed(2), tax_total: row.taxTotal.toFixed(2),
     total: row.total.toFixed(2), amount_paid: row.amountPaid.toFixed(2), balance_due: balance.toFixed(2),
     is_overdue: row.status === 'CONFIRMED' && balance.gt(0) && day(row.dueDate)! < today,
-    capabilities: { can_confirm: false, can_cancel: false, can_send: false, can_print: false,
+    capabilities: { can_confirm: role !== 'CUSTOMER' && row.status === 'DRAFT',
+      can_cancel: role !== 'CUSTOMER' && ['DRAFT', 'CONFIRMED'].includes(row.status) && row.amountPaid.isZero(),
+      can_send: role !== 'CUSTOMER' && ['CONFIRMED', 'PAID'].includes(row.status), can_print: true,
       can_record_payment: role !== 'CUSTOMER' && row.status === 'CONFIRMED' && balance.gt(0) },
   };
 }
@@ -58,23 +60,31 @@ function lineView(line: SubscriptionRow['lines'][number]) {
     effective_from: day(line.effectiveFrom), effective_until: day(line.effectiveUntil), subtotal: subtotal.toFixed(2),
     tax_amount: taxTotal.toFixed(2), total: subtotal.plus(taxTotal).toFixed(2), taxes };
 }
-export function subscriptionSummary(row: SubscriptionRow, today: string) {
+export function subscriptionSummary(row: SubscriptionRow, today: string, role = 'CUSTOMER') {
   const effective = row.startDate && day(row.startDate)! > today ? day(row.startDate)! : today;
   const lines = row.lines.filter(line => day(line.effectiveFrom)! <= effective && (!line.effectiveUntil || day(line.effectiveUntil)! > effective)).map(lineView);
   const subtotal = lines.reduce((sum, line) => sum.plus(line.subtotal), new Decimal(0));
   const tax = lines.reduce((sum, line) => sum.plus(line.tax_amount), new Decimal(0));
+  const staff = role !== 'CUSTOMER', proposed = row.status === 'DRAFT' || row.status === 'QUOTATION';
+  const active = row.status === 'ACTIVE' && !row.closeEffectiveDate;
+  const unexpired = !row.expiryDate || day(row.expiryDate)! > today;
   return { ...base(row), number: row.number, customer_id: row.customerId, customer_name: row.customer.name,
     plan_id: row.planId, plan_name: row.plan.name, status: row.status.toLowerCase(), is_paused: row.isPaused,
-    currency: row.currency, billing_interval: row.billingInterval.toLowerCase(), start_date: day(row.startDate),
+    currency: proposed ? row.plan.currency : row.currency, billing_interval: (proposed ? row.plan.billingInterval : row.billingInterval).toLowerCase(), start_date: day(row.startDate),
     expiry_date: day(row.expiryDate), next_billing_date: day(row.nextBillingDate), recurring_subtotal: subtotal.toFixed(2),
     estimated_tax_total: tax.toFixed(2), estimated_total: subtotal.plus(tax).toFixed(2),
     pause_effective_date: day(row.pauseEffectiveDate), resume_effective_date: day(row.resumeEffectiveDate), close_effective_date: day(row.closeEffectiveDate),
-    capabilities: { can_edit: false, can_quote: false, can_confirm: false, can_activate: false, can_pause: false,
-      can_resume: false, can_renew: false, can_close: false, can_change_addons: false },
+    capabilities: { can_edit: staff && row.status === 'DRAFT', can_quote: staff && row.status === 'DRAFT' && lines.length > 0,
+      can_confirm: staff && row.status === 'QUOTATION' && !!row.quotationValidUntil && day(row.quotationValidUntil)! >= today,
+      can_activate: staff && row.status === 'CONFIRMED',
+      can_pause: active && unexpired && !row.pauseEffectiveDate && !row.isPaused && (row.allowPauseSnapshot ?? row.plan.allowPause),
+      can_resume: active && unexpired && row.isPaused && !row.resumeEffectiveDate && (row.allowPauseSnapshot ?? row.plan.allowPause),
+      can_renew: active && !!row.expiryDate && (row.allowRenewalSnapshot ?? row.plan.allowRenewal),
+      can_close: active && (row.allowEarlyCloseSnapshot ?? row.plan.allowEarlyClose), can_change_addons: active && unexpired },
   };
 }
-export function subscriptionDetail(row: SubscriptionRow, today: string) {
-  return { ...subscriptionSummary(row, today), template_id: row.templateId, payment_term_id: row.paymentTermId,
+export function subscriptionDetail(row: SubscriptionRow, today: string, role = 'CUSTOMER') {
+  return { ...subscriptionSummary(row, today, role), template_id: row.templateId, payment_term_id: row.paymentTermId,
     payment_term_name: row.paymentTerm?.name, quotation_valid_until: day(row.quotationValidUntil), paused_at: row.pausedAt?.toISOString() ?? null,
     closed_at: row.closedAt?.toISOString() ?? null, payment_due_days: row.dueDaysSnapshot ?? row.paymentTerm?.dueDays,
     policy_snapshot: { auto_close: row.autoCloseSnapshot ?? row.plan.autoClose, allow_early_close: row.allowEarlyCloseSnapshot ?? row.plan.allowEarlyClose,

@@ -5,6 +5,7 @@ import type { Invoice, InvoiceResponse, PaymentInput, PaymentListResponse, Payme
 import { money } from '../../api/format'
 import { paymentStorageKey, readPendingPayment } from '../../api/pending-payment'
 import { FormAlert, FormSuccess } from './FormFeedback'
+import RecordHistory from './RecordHistory'
 
 export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpired }: {
   id: string; userId: string; onClose: () => void; onChanged: () => void; onExpired: () => void
@@ -12,9 +13,12 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [payments, setPayments] = useState<PaymentListResponse | null>(null)
   const [revision, setRevision] = useState(0)
+  const [paymentPage, setPaymentPage] = useState(1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [success, setSuccess] = useState('')
+  const [invoiceAction, setInvoiceAction] = useState<PreparedMutation | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
   const storageKey = paymentStorageKey(userId, id)
 
   const [restored] = useState(() => {
@@ -41,7 +45,7 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
     const controller = new AbortController()
     void Promise.all([
       api.get<InvoiceResponse>(`/invoices/${id}`, {}, controller.signal),
-      api.get<PaymentListResponse>(`/invoices/${id}/payments`, { page_size: 20 }, controller.signal),
+      api.get<PaymentListResponse>(`/invoices/${id}/payments`, { page_size: 20, page: paymentPage }, controller.signal),
     ]).then(([detail, history]) => {
       if (controller.signal.aborted) return
       setInvoice(detail.data)
@@ -52,10 +56,10 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
       else setError(failure)
     })
     return () => controller.abort()
-  }, [id, revision, onExpired])
+  }, [id, revision, paymentPage, onExpired])
 
   const amountFormatValid = /^(0|[1-9][0-9]{0,15})\.[0-9]{2}$/.test(input.amount.trim())
-  const canSubmitPayment = Boolean(invoice && (amountFormatValid || pending) && input.payment_date && !busy)
+  const canSubmitPayment = Boolean(invoice && (amountFormatValid || pending) && input.payment_date && !busy && !invoiceAction)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -104,6 +108,23 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
     }
   }
 
+  async function changeInvoice(actionName: 'confirm' | 'cancel' | 'send') {
+    if (!invoice) return
+    const action = invoiceAction ?? api.prepare(`/invoices/${id}/${actionName}`, 'POST', actionName === 'cancel' ? { reason: cancelReason } : {}, invoice.version)
+    setInvoiceAction(action); setBusy(true); setError(null); setSuccess('')
+    try {
+      await api.send(action)
+      setInvoiceAction(null); setRevision(value => value + 1); onChanged()
+      setSuccess(actionName === 'send' ? 'Invoice email queued for delivery.' : `Invoice ${actionName === 'confirm' ? 'confirmed' : 'cancelled'}.`)
+    } catch (failure) {
+      setError(failure)
+      if (failure instanceof ApiError && failure.status === 401) onExpired()
+      if (failure instanceof ApiError && [403, 404, 412, 422, 428, 503].includes(failure.status) || failure instanceof ApiError && failure.code === 'INVALID_TRANSITION') {
+        setInvoiceAction(null); setRevision(value => value + 1)
+      }
+    } finally { setBusy(false) }
+  }
+
   return (
     <section className="panel live-invoice-detail" aria-label="Invoice details">
       <div className="section-header-row">
@@ -114,7 +135,7 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
         <button
           className="secondary-button"
           onClick={onClose}
-          disabled={busy || pending !== null}
+          disabled={busy || pending !== null || invoiceAction !== null}
         >
           ✕ Close details
         </button>
@@ -171,6 +192,15 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
               <div className="stat-top">Balance Due</div>
               <div className="stat-value">{money(invoice.balance_due)}</div>
             </article>
+          </div>
+
+          <div className="capabilities-bar">
+            {invoiceAction ? <button className="primary-button" disabled={busy} onClick={() => void changeInvoice(invoiceAction.path.split('/').at(-1) as 'confirm' | 'cancel' | 'send')}>Retry same invoice action</button> : <>
+              {invoice.capabilities.can_confirm && <button className="primary-button" disabled={busy || !!pending} onClick={() => void changeInvoice('confirm')}>Confirm invoice</button>}
+              {invoice.capabilities.can_send && <button className="secondary-button" disabled={busy || !!pending} onClick={() => void changeInvoice('send')}>Email invoice</button>}
+              {invoice.capabilities.can_cancel && <><input aria-label="Cancellation reason" maxLength={500} placeholder="Reason for cancellation" value={cancelReason} onChange={event => setCancelReason(event.target.value)} /><button className="secondary-button" disabled={busy || !!pending || !cancelReason.trim()} onClick={() => void changeInvoice('cancel')}>Cancel invoice</button></>}
+            </>}
+            {invoice.capabilities.can_print && <a className="secondary-button" href={`/api/v1/invoices/${id}/pdf`} target="_blank" rel="noreferrer">Print / download PDF</a>}
           </div>
 
           {/* Capabilities inspection */}
@@ -302,7 +332,9 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
           )}
 
           <div className="recent-payments-section">
+            {invoice.capabilities.can_send && <RecordHistory path={`/invoices/${id}/deliveries`} title="Email delivery history" revision={revision} onExpired={onExpired} />}
             <h3>Payment Transactions</h3>
+            {payments && <div><button disabled={paymentPage <= 1} onClick={() => setPaymentPage(v => v - 1)}>Previous payments</button> <span>Page {paymentPage} of {Math.max(1, payments.meta.total_pages)}</span> <button disabled={paymentPage >= payments.meta.total_pages} onClick={() => setPaymentPage(v => v + 1)}>Next payments</button></div>}
             {payments ? (
               payments.data.length === 0 ? (
                 <p className="field-hint">No payments have been recorded for this invoice yet.</p>
