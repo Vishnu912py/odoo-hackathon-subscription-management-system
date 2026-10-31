@@ -4,11 +4,22 @@ Build a unified platform for Brightloop Software to manage products, recurring p
 
 ## Current status
 
-Planning only: this repository contains documentation, with no application scaffold, dependencies, migrations, or runnable tests yet. Installation and start commands will be added after scaffolding.
+The [backend foundation](backend/README.md) now lives in `backend/`: Express/TypeScript, Prisma configuration, health endpoints, standard error handling and HTTP/configuration tests. Business API operations explicitly return 501 until implemented. Domain schema/migrations, auth and subscription/billing features are still pending. The UI remains a static wireframe.
 
 The original documentation proposed an Odoo-based implementation. The supplied problem statement does not explicitly mandate that framework.
 
-The subsequent UI, schema and API handoffs use **React + TypeScript, Express + TypeScript and PostgreSQL** as the working implementation baseline. Runtime versions, ORM and deployment target remain open. The [API contracts](docs/api-contracts.md) now define shared request/response formats and proposed MVP policies; they supersede older open questions where explicitly resolved.
+The implementation baseline is **React + TypeScript, Express + TypeScript, PostgreSQL, Prisma ORM and Prisma Migrate**. Backend uses Node.js 24 and pinned Prisma 7 packages. Database schema/migrations live in `backend/prisma`. Deployment target remains open. The [API contracts](docs/api-contracts.md) define shared request/response formats and proposed MVP policies; they supersede older open questions where explicitly resolved.
+
+## Run the backend foundation
+
+```powershell
+cd backend
+npm ci
+npm run prisma:generate
+npm run dev
+```
+
+Open `http://localhost:3000/health/live`. PostgreSQL is not required for liveness or HTTP tests; configure your own `DATABASE_URL` before expecting `/health/ready` to succeed. See [backend setup](backend/README.md) for environment variables, migration workflow and frontend proxy configuration. No business API is ready for end-to-end integration yet.
 
 ## Team responsibilities
 
@@ -39,7 +50,7 @@ Subscriptions follow **Draft -> Quotation -> Confirmed -> Active -> Closed**. Pa
 3. Settle unresolved choices in [architecture and contracts](docs/architecture.md) before building incompatible implementations.
 4. Follow [the roadmap](plan.md) and [contribution workflow](contributing.md).
 
-After scaffolding, add verified prerequisites, environment variable names, database setup/seed commands, start commands and test commands here. Never commit credentials or real customer data.
+Application setup and test commands are maintained in [backend/README.md](backend/README.md). Database migrations and seed commands will be documented when Zenfox implements them. Never commit credentials or real customer data.
 
 ## Documentation index
 

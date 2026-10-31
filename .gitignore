@@ -1,0 +1,13 @@
+# Local dependencies, builds and generated clients
+**/node_modules/
+backend/dist/
+backend/src/generated/
+backend/coverage/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.log
+__pycache__/
+*.pyc
