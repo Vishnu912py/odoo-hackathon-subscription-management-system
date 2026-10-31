@@ -239,6 +239,9 @@ CREATE TABLE "subscriptions" (
     "is_paused" BOOLEAN NOT NULL DEFAULT false,
     "paused_at" TIMESTAMPTZ(6),
     "closed_at" TIMESTAMPTZ(6),
+    "pause_effective_date" DATE,
+    "resume_effective_date" DATE,
+    "close_effective_date" DATE,
     "recurrence_anchor_day" INTEGER,
     "auto_close_snapshot" BOOLEAN,
     "allow_early_close_snapshot" BOOLEAN,
@@ -250,6 +253,18 @@ CREATE TABLE "subscriptions" (
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "subscriptions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "subscription_pause_intervals" (
+    "id" UUID NOT NULL,
+    "subscription_id" UUID NOT NULL,
+    "start_date" DATE NOT NULL,
+    "end_date" DATE,
+    "reason" TEXT,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "subscription_pause_intervals_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -369,6 +384,19 @@ CREATE TABLE "discount_rules" (
 );
 
 -- CreateTable
+CREATE TABLE "discount_rule_activities" (
+    "id" UUID NOT NULL,
+    "discount_rule_id" UUID NOT NULL,
+    "is_active" BOOLEAN NOT NULL,
+    "effective_from" TIMESTAMPTZ(6) NOT NULL,
+    "effective_until" TIMESTAMPTZ(6),
+    "reason" TEXT,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "discount_rule_activities_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "discount_products" (
     "discount_rule_id" UUID NOT NULL,
     "product_id" UUID NOT NULL,
@@ -427,9 +455,15 @@ CREATE TABLE "billing_runs" (
     "id" UUID NOT NULL,
     "initiated_by_id" UUID,
     "as_of_date" DATE NOT NULL,
+    "period_limit" INTEGER,
+    "subscription_id_filter" UUID,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "subscriptions_processed" INTEGER NOT NULL DEFAULT 0,
     "invoices_generated" INTEGER NOT NULL DEFAULT 0,
+    "invoices_reused" INTEGER NOT NULL DEFAULT 0,
+    "invoices_failed" INTEGER NOT NULL DEFAULT 0,
+    "has_more" BOOLEAN NOT NULL DEFAULT false,
+    "next_run_required" BOOLEAN NOT NULL DEFAULT false,
     "total_amount_billed" DECIMAL(18,2) NOT NULL DEFAULT 0,
     "errors" JSONB,
     "started_at" TIMESTAMPTZ(6),
@@ -549,6 +583,9 @@ ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_template_id_fkey" FORE
 ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_payment_term_id_fkey" FOREIGN KEY ("payment_term_id") REFERENCES "payment_terms"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "subscription_pause_intervals" ADD CONSTRAINT "subscription_pause_intervals_subscription_id_fkey" FOREIGN KEY ("subscription_id") REFERENCES "subscriptions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "subscription_lines" ADD CONSTRAINT "subscription_lines_subscription_id_fkey" FOREIGN KEY ("subscription_id") REFERENCES "subscriptions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -583,6 +620,9 @@ ALTER TABLE "invoice_line_taxes" ADD CONSTRAINT "invoice_line_taxes_invoice_line
 
 -- AddForeignKey
 ALTER TABLE "invoice_line_taxes" ADD CONSTRAINT "invoice_line_taxes_tax_id_fkey" FOREIGN KEY ("tax_id") REFERENCES "taxes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "discount_rule_activities" ADD CONSTRAINT "discount_rule_activities_discount_rule_id_fkey" FOREIGN KEY ("discount_rule_id") REFERENCES "discount_rules"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "discount_products" ADD CONSTRAINT "discount_products_discount_rule_id_fkey" FOREIGN KEY ("discount_rule_id") REFERENCES "discount_rules"("id") ON DELETE CASCADE ON UPDATE CASCADE;

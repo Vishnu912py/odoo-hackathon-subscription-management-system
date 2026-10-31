@@ -5,48 +5,65 @@ Build a unified platform for Brightloop Software to manage products, recurring p
 ## Technology stack
 
 The confirmed technology stack is:
-- **Frontend:** React + Vite + TypeScript
-- **Backend:** Node.js + Express + TypeScript
-- **Database:** PostgreSQL
-- **ORM & Migrations:** Prisma ORM + Prisma Migrate
+- **Frontend:** React + Vite + TypeScript (`/frontend`)
+- **Backend:** Node.js + Express + TypeScript (`/backend`)
+- **Database:** PostgreSQL 16 + Prisma ORM 5.22.0 (`/database`)
 - **Contracts:** OpenAPI 3.1 REST JSON (`docs/api/openapi.json`)
 
-## Database setup and migrations
+## Directory structure
 
-Prerequisites: Node.js (v18+), npm, and a running PostgreSQL instance.
+```text
+├── frontend/               # React + Vite + TypeScript web application
+├── database/               # PostgreSQL schema, Prisma models, migrations, seeds & tests
+│   ├── prisma/             # schema.prisma, migrations, and idempotent seed.ts
+│   ├── scripts/            # verify_schema_integrity.py and test_db_constraints.ts
+│   └── README.md           # Database developer guide
+├── docs/                   # Specifications, ER diagrams, API contracts, and wireframes
+└── .github/workflows/      # Automated CI workflows (PostgreSQL 16 service integration)
+```
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+## Database setup and verification
 
-2. **Configure environment:**
-   Copy `.env.example` to `.env` and set your PostgreSQL connection string:
-   ```bash
-   cp .env.example .env
-   # Edit DATABASE_URL in .env
-   ```
+Prerequisites: Node.js (v20+ or v22+), npm, Python (v3.10+).
 
-3. **Validate schema & generate client:**
-   ```bash
-   npx prisma validate
-   npx prisma generate
-   ```
+### 1. Static validation (No database server required)
 
-4. **Apply migrations:**
-   ```bash
-   npx prisma migrate dev
-   ```
+```bash
+# Install root dependencies
+npm install
 
-5. **Seed baseline demo data:**
-   ```bash
-   npm run prisma:seed
-   ```
+# Validate Prisma schema
+npx prisma validate --schema=database/prisma/schema.prisma
 
-6. **Verify schema & constraint integrity:**
-   ```bash
-   python scripts/verify_schema_integrity.py
-   ```
+# Generate Prisma Client to node_modules/@prisma/client
+npm run prisma:generate
+
+# Run static schema, migration DDL, and ER documentation verifier
+npm run db:validate
+
+# Type-check TypeScript seed and constraint test scripts
+npx tsc --noEmit database/prisma/seed.ts database/scripts/test_db_constraints.ts
+```
+
+### 2. Live database operations (Requires running PostgreSQL)
+
+```bash
+# Configure connection string in .env
+cp .env.example .env
+# Edit DATABASE_URL in .env
+
+# Apply migrations
+npm run prisma:migrate
+
+# Or deploy in staging/production/CI
+npm run prisma:deploy
+
+# Execute idempotent synthetic test seed fixtures (safe to run multiple times)
+npm run prisma:seed
+
+# Run PostgreSQL constraint and concurrency integration tests
+npm run test:db
+```
 
 ## Team responsibilities
 
@@ -58,11 +75,11 @@ Prerequisites: Node.js (v18+), npm, and a running PostgreSQL instance.
 
 See [team responsibilities](docs/team-responsibilities.md) for work packages and handoffs.
 
-Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md) and [API impact guide](docs/api-impact.md), including relationships, constraints and unresolved billing policies.
+Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md) and [API impact guide](docs/api-impact.md), including relationships, constraints and confirmed billing policies.
 
-Frontend implementation starts with the [UI wireframe and handoff](docs/ui-wireframe.md). Open `docs/wireframes/index.html` locally to explore the admin, staff and customer screens with sample data.
+Frontend implementation lives under `/frontend`.
 
-All three contributors should use the [API integration guide](docs/api-contracts.md), [OpenAPI file](docs/api/openapi.json) and [shared examples](docs/api/examples/manifest.json) before implementing their interfaces. These define the target contract, not running endpoints.
+All three contributors use the [API integration guide](docs/api-contracts.md), [OpenAPI file](docs/api/openapi.json) and [shared examples](docs/api/examples/manifest.json) before implementing their interfaces.
 
 ## Required user journey
 
@@ -74,7 +91,7 @@ Subscriptions follow **Draft -> Quotation -> Confirmed -> Active -> Closed**. Pa
 
 1. Read [requirements](docs/requirements.md) for statement-derived scope and acceptance checks.
 2. Read [team responsibilities](docs/team-responsibilities.md) for your work package.
-3. Settle unresolved choices in [architecture and contracts](docs/architecture.md) and [API impact](docs/api-impact.md) before building incompatible implementations.
+3. Review confirmed billing defaults in [architecture](docs/architecture.md) and [API impact](docs/api-impact.md).
 4. Follow [the roadmap](plan.md) and [contribution workflow](contributing.md).
 
 Never commit credentials or real customer data.
@@ -85,3 +102,4 @@ Never commit credentials or real customer data.
 - [`contributing.md`](./contributing.md): Contribution workflow and quality expectations.
 - [`plan.md`](./plan.md): Current implementation roadmap and milestones.
 - [`docs/README.md`](./docs/README.md): Shared documentation structure and expansion guidance.
+- [`database/README.md`](./database/README.md): Database layer setup, migrations, and test commands.

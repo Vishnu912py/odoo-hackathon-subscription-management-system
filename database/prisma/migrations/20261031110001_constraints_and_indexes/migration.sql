@@ -52,6 +52,10 @@ ALTER TABLE "quotation_template_lines"
 ALTER TABLE "subscriptions"
   ADD CONSTRAINT "subscriptions_expiry_bounds_check" CHECK ("expiry_date" IS NULL OR "expiry_date" >= "start_date");
 
+-- Subscription Pause Intervals
+ALTER TABLE "subscription_pause_intervals"
+  ADD CONSTRAINT "subscription_pause_intervals_bounds_check" CHECK ("end_date" IS NULL OR "end_date" >= "start_date");
+
 -- Subscription Lines
 ALTER TABLE "subscription_lines"
   ADD CONSTRAINT "subscription_lines_quantity_check" CHECK ("quantity" > 0),
@@ -82,13 +86,17 @@ ALTER TABLE "invoice_line_taxes"
   ADD CONSTRAINT "invoice_line_taxes_taxable_base_check" CHECK ("taxable_base" >= 0),
   ADD CONSTRAINT "invoice_line_taxes_amount_check" CHECK ("amount" >= 0);
 
--- Discount Rules
+-- Discount Rules: value > 0 AND conditional upper bound of 100 for PERCENTAGE
 ALTER TABLE "discount_rules"
-  ADD CONSTRAINT "discount_rules_value_check" CHECK ("value" > 0),
+  ADD CONSTRAINT "discount_rules_value_check" CHECK ("value" > 0 AND ("discount_type" != 'PERCENTAGE' OR "value" <= 100)),
   ADD CONSTRAINT "discount_rules_minimum_purchase_check" CHECK ("minimum_purchase" IS NULL OR "minimum_purchase" >= 0),
   ADD CONSTRAINT "discount_rules_minimum_quantity_check" CHECK ("minimum_quantity" IS NULL OR "minimum_quantity" > 0),
   ADD CONSTRAINT "discount_rules_valid_bounds_check" CHECK ("valid_until" IS NULL OR "valid_until" >= "valid_from"),
   ADD CONSTRAINT "discount_rules_usage_limit_check" CHECK ("usage_limit" IS NULL OR "usage_limit" > 0);
+
+-- Discount Rule Activities
+ALTER TABLE "discount_rule_activities"
+  ADD CONSTRAINT "discount_rule_activities_bounds_check" CHECK ("effective_until" IS NULL OR "effective_until" >= "effective_from");
 
 -- Discount Redemptions
 ALTER TABLE "discount_redemptions"
