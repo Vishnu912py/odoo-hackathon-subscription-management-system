@@ -64,4 +64,11 @@ try {
   if (sub.capabilities.can_close && !sub.close_effective_date) await call(`/api/v1/subscriptions/${sub.id}/close`, 'POST', { reason: 'Acceptance verification completed; synthetic record.' }, sub.version);
   if (process.argv.includes('--email') && !state.invited) { const current = (await call(`/api/v1/customers/${customer.id}`)).data; await call(`/api/v1/customers/${customer.id}/invite`, 'POST', {}, current.version); state.invited = true; save(); }
   if (process.argv.includes('--email') && !state.emailed) { invoice = (await call(`/api/v1/invoices/${invoice.id}`)).data; await call(`/api/v1/invoices/${invoice.id}/send`, 'POST', {}, invoice.version); state.emailed = true; save(); }
+  if (process.argv.includes('--cleanup')) {
+    await prisma.$transaction(async tx => {
+      await tx.user.update({ where: { id: state.userId }, data: { isActive: false } });
+      await tx.session.deleteMany({ where: { userId: state.userId } });
+    });
+    console.info('Temporary acceptance administrator disabled and its sessions revoked.');
+  }
 } finally { await database.close(); }

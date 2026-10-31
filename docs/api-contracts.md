@@ -1,12 +1,12 @@
 # Brightloop API contracts v0.1
 
-> Current checkout update (31 October 2026): all 68 API operations are integrated. See [the product guide](integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; deployment and real-email acceptance remain separate checks.
+> Current checkout update (31 October 2026): all 75 API operations are integrated. See [the product guide](integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; hosted deployment and real-email acceptance are verified in the product guide.
 
 Implementation owner: **Vishnu912py**. Frontend consumer: **albinsavi123-lang**. Persistence owner: **Zenfox-690**.
 
 This is the shared implementation baseline for React + TypeScript, Express + TypeScript and PostgreSQL. **No API server or database migrations are implemented by these files.** API shapes below are the target for initial development. Business policies marked as proposed defaults are engineering decisions made for this handoff, not additional requirements from the problem statement or claims of prior team approval.
 
-Implementation status: [prototype v1](prototype-v1.md) implements 14 auth/read/report/payment operations using the existing contracts. Other operations return `501 NOT_IMPLEMENTED`. Infrastructure errors also use `413 PAYLOAD_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, and `503 DATABASE_UNAVAILABLE` when no database is configured, with the same error envelope. Prisma ORM/Migrate is confirmed; schema and migrations are located in `backend/prisma`.
+Implementation status: all 75 operations have concrete handlers; [prototype v1](prototype-v1.md) records an earlier increment. Infrastructure errors use `413 PAYLOAD_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, and `503 DATABASE_UNAVAILABLE` when no database is configured, with the same error envelope. Prisma ORM/Migrate is confirmed; schema and migrations are located in `backend/prisma`.
 
 ## Source of truth and files
 

@@ -4,9 +4,9 @@ Build a unified platform for Brightloop Software to manage products, recurring p
 
 ## Implementation status
 
-The current checkout integrates React/TypeScript, Express/TypeScript, PostgreSQL and Prisma 7 into a runnable subscription product. All **68 contract operations** have handlers, including catalog, lifecycle, scheduled billing, invoice actions/PDF/email, payments and reporting. Run **`npm run dev` from the repository root** after database/dependency setup to start the API, UI and billing worker together.
+The current checkout integrates React/TypeScript, Express/TypeScript, PostgreSQL and Prisma 7 into a runnable subscription product. All **75 contract operations** have handlers, including catalog, lifecycle, scheduled billing, invoice actions/PDF/email, payments and reporting. Run **`npm run dev` from the repository root** after database/dependency setup to start the API, UI and billing worker together.
 
-See [integrated product setup and verification](docs/integrated-product.md) for the complete workflow, fresh checks, local browser/performance evidence and remaining external release checks. Hosted deployment and live inbox delivery are not yet verified. The dated team checklist below is historical and does not supersede the current integration guide.
+See [integrated product setup and verification](docs/integrated-product.md) for the complete workflow, fresh checks, local browser/performance evidence and hosted acceptance evidence and operational limits. Hosted deployment and live invitation, invoice and reset email delivery are verified. The dated team checklist below is historical and does not supersede the current integration guide.
 
 <a id="foundation-checklist--31-october-2026"></a>
 

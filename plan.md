@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-> Current checkout update (31 October 2026): all 68 API operations are integrated. See [the product guide](docs/integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; deployment and real-email acceptance remain separate checks.
+> Current checkout update (31 October 2026): all 75 API operations are integrated. See [the product guide](docs/integrated-product.md) for setup, current behavior and actual checks. Prototype-only status statements below describe earlier increments; hosted deployment and real-email acceptance are verified in the product guide.
 
 ## Goal
 
