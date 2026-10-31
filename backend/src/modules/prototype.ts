@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient, type InvoiceStatus, type SubscriptionStatus 
 import type { Config } from '../config.js';
 import { HttpError } from '../http/errors.js';
 import { validateBody, validateQuery, uuidPattern } from '../http/validation.js';
+import type { MailTransport } from './accounts/mail.js';
 import { authentication, actor, type Actor } from './accounts/routes.js';
 import { recordPayment } from './billing/payments.js';
 import { businessDate, day, Decimal, invoiceDetail, invoiceDetailInclude, invoiceInclude, invoiceSummary,
@@ -32,20 +33,21 @@ function order(q: Query, fallback = 'createdAt') {
 function dates(q: Query) { return { ...(q.from ? { gte: new Date(String(q.from)) } : {}), ...(q.to ? { lte: new Date(String(q.to)) } : {}) }; }
 export const implemented = new Set([
   'get /auth/csrf', 'get /auth/me', 'post /auth/login', 'post /auth/register', 'post /auth/logout',
+  'post /auth/forgot-password', 'post /auth/reset-password', 'get /staff', 'post /staff', 'get /staff/{id}', 'patch /staff/{id}',
   'get /subscriptions', 'get /subscriptions/{id}', 'get /invoices', 'get /invoices/{id}',
   'get /payments', 'get /invoices/{id}/payments', 'post /invoices/{id}/payments', 'get /reports/overview', 'get /portal/overview',
 ]);
 
-export function prototypeRouter(prisma: PrismaClient | undefined, config: Config, now: () => Date = () => new Date()) {
+export function prototypeRouter(prisma: PrismaClient | undefined, config: Config, now: () => Date = () => new Date(), transport?: MailTransport) {
   const router = Router();
   if (!prisma) {
     for (const operation of implemented) {
-      const [method, path] = operation.split(' ') as ['get' | 'post', string];
+      const [method, path] = operation.split(' ') as ['get' | 'post' | 'patch', string];
       router[method](path.replace('{id}', ':id'), () => { throw new HttpError(503, 'DATABASE_UNAVAILABLE', 'Configure PostgreSQL before using this feature.'); });
     }
     return router;
   }
-  const auth = authentication(prisma, config);
+  const auth = authentication(prisma, config, transport);
   router.use(auth.router);
   router.param('id', (_req, _res, next, id: string) => {
     if (!uuidPattern.test(id)) return next(new HttpError(404, 'NOT_FOUND', 'Record not found.'));

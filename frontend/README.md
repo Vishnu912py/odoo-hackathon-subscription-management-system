@@ -69,3 +69,7 @@ Manual browser check:
 6. Sign out and reload: private records disappear. Stop the backend and verify the connection error.
 
 Automated browser access was declined, so visual layout and the actual browser cookie/proxy round trip remain unverified. For deployment, configure a same-origin reverse proxy for `/api` and `/health`; Vite's `server.proxy` is development-only. `vite preview` is not the production API proxy.
+
+## Authentication increment
+
+Forgot-password and link-based password setup use the real API. Admin sessions gain a Staff tab for invitations and enable/disable controls. See [authentication handoff](../docs/authentication-v1.md) for Gmail configuration and Vercel deployment. Mail acceptance does not prove inbox delivery.

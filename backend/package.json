@@ -24,7 +24,9 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "test:db": "tsx scripts/test_db_constraints.ts",
     "test:verify": "python scripts/verify_schema_integrity.py",
-    "test:integration": "tsx --test test/integration/*.test.ts"
+    "test:integration": "tsx --test test/integration/*.test.ts",
+    "admin:create": "tsx scripts/create_admin.ts",
+    "mail:deliver": "tsx scripts/auth_mail_worker.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

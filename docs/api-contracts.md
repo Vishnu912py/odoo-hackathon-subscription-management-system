@@ -242,3 +242,7 @@ Prefer a virtual environment for validation dependencies. The validator also acc
 Albin: build API adapters and mocks against OpenAPI examples; always render server statuses/capabilities, preserve form input on errors, and retry with the same key. Zenfox: implement constraints, fixtures, migrations and transactional support. Vishnu: implement handlers/permissions/domain behavior and integration tests.
 
 Contract PRs change the generator, regenerated OpenAPI/examples and this guide together. No teammate independently renames fields/enums or switches money/date formats. Additive optional fields may fit v1; breaking changes require explicit coordination before merge or a new version after clients depend on v1. Contract validation is necessary but does not prove the implemented endpoints work; backend integration tests must exercise authorization, concurrency, email/job behavior, billing totals and failure recovery.
+
+## Authentication implementation update
+
+The existing forgot/reset and staff contracts are now implemented without payload changes. Password setup uses `/auth/reset-password`; Vercel/Gmail setup and local verification are documented in [authentication-v1.md](authentication-v1.md). Six newly implemented operations bring the prototype total to 20.

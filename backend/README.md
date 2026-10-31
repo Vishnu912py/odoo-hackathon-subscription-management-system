@@ -10,7 +10,7 @@ Express + TypeScript server foundation with PostgreSQL through Prisma ORM and Pr
 - `GET /api/v1/openapi.json`: shared contract in development/test; disabled in production.
 - Exact-origin credentialed CORS, security headers, bounded JSON parsing, request IDs and sanitized error envelopes.
 - Graceful SIGINT/SIGTERM shutdown and tests for foundation behavior.
-- Prototype v1 implements 14 auth/read/report/payment operations. Other contract operations return 501; no recurring billing worker or payment gateway exists. See the prototype endpoint inventory.
+- Prototype v1 implements 20 auth/staff/read/report/payment operations. Other contract operations return 501; no recurring billing worker or payment gateway exists. See the prototype endpoint inventory.
 - Domain schema, reviewed PostgreSQL migrations, idempotent synthetic seeds and constraint integration tests implemented in `backend/prisma` and `backend/scripts` by Zenfox-690.
 
 ## Local setup
@@ -61,7 +61,7 @@ backend/
       reporting/            Staff reports and owned customer summaries
     generated/prisma/       Generated Prisma 7 client, ignored by Git
   prisma/
-    schema.prisma           Shared schema source (32 domain models)
+    schema.prisma           Shared schema source (32 domain models plus two authentication infrastructure models)
     migrations/             Committed baseline and custom SQL migrations
       20261031110000_init/              Base table definitions & relations
       20261031110001_constraints.../    PostgreSQL CHECKs & functional indexes
@@ -117,3 +117,7 @@ npm start
 2. Vishnu: complete password reset/staff setup and the create/quote/activate/bill path. Auth, CSRF, ownership and payments are implemented in prototype v1.
 3. Albin: shell/forms against contracts, then replace mocks when each backend handler exists.
 4. Add real-database integration tests for ownership, migrations, billing concurrency and payment replay before merging those features.
+
+## Authentication and hosting
+
+See [V1 authentication and Vercel handoff](../docs/authentication-v1.md). Apply the additive authentication migration before running this version. Missing Gmail configuration fails reset/invite operations with 503; ordinary sign-in remains available. `npm run mail:deliver` retries queued mail; `npm run admin:create` is an explicit one-time operator command, never a build or seed step.

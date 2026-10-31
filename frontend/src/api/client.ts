@@ -120,6 +120,16 @@ export class ApiClient {
     return (await this.auth<{ data: User }>('register', input)).data
   }
 
+  forgotPassword(email: string) {
+    return this.auth<{ data: { message: string } }>('forgot-password', { email })
+  }
+
+  async resetPassword(token: string, password: string) {
+    const result = await this.auth<{ data: { message: string } }>('reset-password', { token, password })
+    this.csrfToken = undefined
+    return result
+  }
+
   async logout(): Promise<void> {
     await this.auth<void>('logout', {})
     this.csrfToken = undefined

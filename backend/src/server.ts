@@ -9,7 +9,8 @@ const app = createApp(config, {
   database,
   logRequest: entry => console.info(JSON.stringify(entry)),
 });
-const server = app.listen(config.port, config.host, () => {
+const server = app.listen(config.port, config.host, (error?: Error) => {
+  if (error) return;
   console.info(`Brightloop backend listening at http://${config.host}:${config.port}`);
   console.info('Prototype v1: auth, owned records, reports and payment recording; other operations return 501.');
 });

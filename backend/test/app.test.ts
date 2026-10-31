@@ -124,7 +124,7 @@ test('request logging excludes query tokens and credentials', async () => {
   });
   await request(app).post('/api/v1/auth/reset-password?token=do-not-log')
     .set('Cookie', 'brightloop_session=do-not-log')
-    .send({ password: 'do-not-log' }).expect(501);
+    .send({ password: 'do-not-log' }).expect(503);
   assert.equal(logs.length, 1);
   assert.equal(logs[0]?.path, '/api/v1/auth/reset-password');
   assert(!JSON.stringify(logs).includes('do-not-log'));

@@ -5,6 +5,8 @@ import { money } from '../../api/format'
 import type { InvoiceSummaryListResponse, OverviewResponse, PaymentListResponse, Session, SubscriptionSummaryListResponse } from '../../api/schema'
 import './live.css'
 import InvoiceDetails from './InvoiceDetails'
+import PasswordRecovery from './PasswordRecovery'
+import StaffManagement from './StaffManagement'
 
 type Page = 'Overview' | 'Subscriptions' | 'Invoices' | 'Payments'
 const pages: Page[] = ['Overview', 'Subscriptions', 'Invoices', 'Payments']
@@ -48,6 +50,7 @@ function SignIn({ onSession }: { onSession: (session: Session) => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [registering, setRegistering] = useState(false)
+  const [recovering, setRecovering] = useState(false)
   const [displayName, setDisplayName] = useState('')
   const [message, setMessage] = useState('')
   async function submit(event: FormEvent) {
@@ -62,6 +65,7 @@ function SignIn({ onSession }: { onSession: (session: Session) => void }) {
     catch (failure) { setError(failure) }
     finally { setBusy(false) }
   }
+  if (recovering) return <PasswordRecovery onDone={() => setRecovering(false)} />
   return <section className="panel live-login">
     <h2>{registering ? 'Create a customer account' : 'Sign in to your workspace'}</h2>
     <p>Use an account created by the backend team. Demo identities do not grant access.</p>
@@ -75,6 +79,7 @@ function SignIn({ onSession }: { onSession: (session: Session) => void }) {
       <button className="primary-button" disabled={busy}>{busy ? 'Please wait…' : registering ? 'Create account' : 'Sign in'}</button>
       <button type="button" disabled={busy} onClick={() => { setRegistering(value => !value); setError(null); setMessage('') }}>{registering ? 'Back to sign in' : 'Create customer account'}</button>
     </form>
+    <button onClick={() => setRecovering(true)}>Forgot password / staff setup</button>
     <p className="live-hint">Prototype v1 connects to persisted accounts and records. Use the development accounts described in the setup guide.</p>
   </section>
 }
@@ -171,9 +176,11 @@ export default function LiveWorkspace() {
   const [session, setSession] = useState<Session | null>(null)
   const [restoring, setRestoring] = useState(true)
   const [revision, setRevision] = useState(0)
-  const [page, setPage] = useState<Page>('Overview')
+  const [page, setPage] = useState<Page | 'Staff'>('Overview')
   const [error, setError] = useState<unknown>(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('reset') ?? '')
+  useEffect(() => { if (resetToken) window.history.replaceState(null, '', window.location.pathname + window.location.search) }, [resetToken])
   // State setters are stable; use one stable expiry callback to avoid refetch loops.
   const expire = useCallback(() => {
     setSession(null)
@@ -194,6 +201,7 @@ export default function LiveWorkspace() {
       setError(failure)
     } finally { setSigningOut(false) }
   }
+  if (resetToken) return <main className="live-workspace"><PasswordRecovery token={resetToken} onDone={() => { setResetToken(''); setSession(null); setRevision(value => value + 1) }} /></main>
   return <main className="live-workspace">
     <header className="live-heading"><div><p className="eyebrow">BRIGHTLOOP · LIVE CONNECTION</p><h1>Subscription workspace</h1><p>Records below come from the backend API.</p></div></header>
     <ConnectionStatus />
@@ -204,8 +212,8 @@ export default function LiveWorkspace() {
     </div>
     {error !== null && <Failure error={error} />}
     {restoring ? <p role="status">Restoring session…</p> : !session ? <SignIn onSession={value => { setError(null); setSession(value); setPage('Overview') }} /> : <>
-      <nav className="live-tabs" aria-label="Live records">{pages.map(item => <button key={item} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}>{item}</button>)}</nav>
-      <Records key={`${session.user.id}-${page}`} session={session} page={page} onExpired={expire} />
+      <nav className="live-tabs" aria-label="Live records">{(session.user.role === 'admin' ? [...pages, 'Staff' as const] : pages).map(item => <button key={item} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}>{item}</button>)}</nav>
+      {page === 'Staff' && session.user.role === 'admin' ? <StaffManagement onExpired={expire} /> : <Records key={`${session.user.id}-${page}`} session={session} page={page === 'Staff' ? 'Overview' : page} onExpired={expire} />}
     </>}
   </main>
 }

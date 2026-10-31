@@ -430,3 +430,27 @@ The following business policies must be confirmed by the team lead before finali
 6. **Partial and overpayment handling:** Confirm whether overpayment is strictly rejected at the database/API boundary or credited toward future invoices.
 7. **Plan and policy snapshotting:** Confirm whether plan policy flags (`auto_close`, `allow_early_close`, `allow_pause`, `allow_renewal`) and payment term `due_days` are snapshotted onto `subscriptions` at confirmation time.
 8. **Confirmed implementation location:** Vishnu finalized Prisma ORM/Migrate. The backend foundation pins Prisma 7, with schema and migration SQL in `backend/prisma` and generated client in ignored `backend/src/generated/prisma`. Zenfox should add the domain schema here rather than creating a second database package.
+
+## V1 authentication infrastructure addition
+
+Migration `20261031150000_auth_delivery` adds two independent support tables without altering domain relations:
+
+```mermaid
+erDiagram
+    AUTH_EMAIL_JOBS {
+        uuid id PK
+        text encrypted_message "AES-256-GCM; erased after send or expiry"
+        timestamptz expires_at
+        int attempts
+        timestamptz available_at "delivery lease and next retry"
+        timestamptz sent_at
+        timestamptz created_at
+    }
+    AUTH_RATE_LIMITS {
+        text key PK "hash of window, endpoint and IP/email"
+        int count
+        timestamptz expires_at
+    }
+```
+
+Each has an expiry/retry index. Email jobs are committed in the same transaction as the existing hashed reset/invitation token; no plaintext link is stored. These are infrastructure records rather than user-owned domain rows. See [authentication handoff](authentication-v1.md) for cleanup, encryption-key handling and delivery guarantees.

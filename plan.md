@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build the Brightloop subscription platform described in `docs/requirements.md`. Status: backend and database foundations are implemented, alongside a React dashboard prototype. Domain schema, migrations and synthetic fixtures are in `backend/prisma`; prototype v1 implements auth, owned reads, reports and transactional payment recording. The full subscription-create/activate/bill journey remains incomplete. React/TypeScript, Express/TypeScript, PostgreSQL and Prisma ORM/Migrate form the baseline. Backend uses Node.js 24/Prisma 7 in `backend/`. Hosting remains open. See the dated [implementation checklist](README.md#foundation-checklist--31-october-2026) for completed deliverables and local-only work. Use `docs/api-contracts.md` for shared interfaces and confirmed MVP defaults. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
+Build the Brightloop subscription platform described in `docs/requirements.md`. Status: backend and database foundations are implemented, alongside a React dashboard prototype. Domain schema, migrations and synthetic fixtures are in `backend/prisma`; prototype v1 implements auth, owned reads, reports and transactional payment recording. The full subscription-create/activate/bill journey remains incomplete. React/TypeScript, Express/TypeScript, PostgreSQL and Prisma ORM/Migrate form the baseline. Backend uses Node.js 24/Prisma 7 in `backend/`. Vercel is selected; deployment configuration is present and hosted database/Gmail setup remains pending. See the dated [implementation checklist](README.md#foundation-checklist--31-october-2026) for completed deliverables and local-only work. Use `docs/api-contracts.md` for shared interfaces and confirmed MVP defaults. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
 
 ## Milestones
 
@@ -29,3 +29,7 @@ Prototype v1 delivers a smaller integrated slice: registration/login, owned subs
 Admin configures product/variant, plan, tax and discount -> staff uses quotation template -> subscription activates -> automatic invoice -> rerun proves no duplicate -> staff records payment -> customer sees owned records -> dashboard shows reconciled totals. Show one permission rejection and one plan-policy restriction.
 
 Upgrades/downgrades and live gateways are optional extensions, not substitutes for unfinished required scope.
+
+## V1 authentication increment
+
+Implementation checklist and deployment gates are tracked in [docs/authentication-v1.md](docs/authentication-v1.md). Local implementation does not check off real-mail delivery or deployed browser acceptance.

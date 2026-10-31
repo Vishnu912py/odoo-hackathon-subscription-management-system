@@ -89,7 +89,7 @@ npm run test:integration
 npm run check
 ```
 
-The integration suite requires a local `DATABASE_URL` with schema-creation permission. It creates a randomly named `prototype_test_*` schema, applies both migrations, seeds, exercises HTTP against real PostgreSQL, then drops only that test schema. It never clears the public/application schema.
+The integration suite requires a local `DATABASE_URL` with schema-creation permission. It creates a randomly named `prototype_test_*` schema, applies all committed migrations, seeds, exercises HTTP against real PostgreSQL, then drops only that test schema. It never clears the public/application schema.
 
 Checks cover response conformance to OpenAPI, auth/CSRF/ownership, reads/report reconciliation, validation, stale versions, final-payment replay after paid status, concurrent independent/identical payments and seed preservation. Frontend checks cover generated types, client errors/cookies/CSRF/idempotency, exact display formatting, recovery metadata, proxy configuration, lint and build. CI runs these alongside Zenfox's database suite.
 
@@ -97,6 +97,10 @@ Visual/browser interaction verification remains blocked by the browser permissio
 
 ## Remaining work
 
-Catalog CRUD, staff setup/reset email, subscription creation/quotation/confirmation/activation/pause/renewal/close, recurring invoice generation, discount application, invoice confirmation/cancellation/send/PDF, and deployment remain unimplemented. Their routes return 501. No automated scheduler is running. This prototype starts with a seeded active subscription and confirmed invoice; it does not yet create the full lifecycle from the UI.
+Catalog CRUD, subscription creation/quotation/confirmation/activation/pause/renewal/close, recurring invoice generation, discount application, invoice confirmation/cancellation/send/PDF remain unimplemented. Vercel setup is prepared but not deployed; Gmail OAuth is not configured. See [authentication setup](authentication-v1.md). Their routes return 501. No automated scheduler is running. This prototype starts with a seeded active subscription and confirmed invoice; it does not yet create the full lifecycle from the UI.
 
-Rate limiting is process-local. Production session cleanup/distributed throttling and deployment hardening remain follow-ups. Reports are scoped and consistent, but the thousands-of-subscriptions performance target has not been measured.
+Rate limiting now uses PostgreSQL, with seven-day absolute session limits and authenticated maintenance. See [authentication setup](authentication-v1.md) for delivery/retry configuration. Reports are scoped and consistent, but the thousands-of-subscriptions performance target has not been measured.
+
+## Authentication increment
+
+Six more contract operations now implement password recovery and admin staff management (20 total). See [the detailed checklist](authentication-v1.md) for the additive migration, Gmail setup, Vercel setup and outstanding external checks.

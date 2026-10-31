@@ -12,6 +12,25 @@ test('money formatting preserves large decimal amounts and fractional zeros exac
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const session = { user: { id: 'user', role: 'staff' }, csrf_token: 'rotated-token', expires_at: '2026-11-01T00:00:00Z' }
 
+test('password recovery sends secrets only in POST bodies and renews CSRF after reset', async () => {
+  const requests = []
+  const client = new ApiClient(async (url, options) => {
+    requests.push({ url, options })
+    if (url.endsWith('/csrf')) return json({ data: { csrf_token: 'csrf-' + requests.length } })
+    if (url.endsWith('/login')) return json({ data: session })
+    return json({ data: { message: 'Accepted' } })
+  })
+  await client.forgotPassword('member@example.test')
+  await client.resetPassword('single-use-secret', 'NewPassword!123')
+  await client.login({ email: 'member@example.test', password: 'NewPassword!123' })
+  assert.equal(requests.filter(r => r.url.endsWith('/csrf')).length, 2)
+  const reset = requests.find(r => r.url.endsWith('/reset-password'))
+  assert.equal(reset.options.method, 'POST')
+  assert.equal(reset.options.credentials, 'include')
+  assert.deepEqual(JSON.parse(reset.options.body), { token: 'single-use-secret', password: 'NewPassword!123' })
+  assert.ok(requests.every(r => !r.url.includes('single-use-secret') && !r.url.includes('NewPassword')))
+})
+
 test('login obtains anonymous CSRF, includes cookies, then uses rotated CSRF for logout', async () => {
   const requests = []
   const client = new ApiClient(async (url, options) => {
