@@ -28,10 +28,14 @@ export interface EligibleDiscountAllocation {
  * Evaluates discount eligibility and calculates the single highest-savings discount.
  * 
  * Rules enforced:
- * 1. Activation and archival history verified via DiscountRuleActivity for the target billing period.
+ * 1. Activation and archival history verified via DiscountRuleActivity for the target billing period:
+ *    - A rule currently deactivated is eligible if historical activity proves it was active throughout [periodStart, periodEnd).
+ *    - A rule that became active after periodStart is excluded.
+ *    - A rule deactivated before periodEnd is excluded.
+ *    - Rules without activity records fall back to current isActive status.
  * 2. Scope matching (PRODUCT vs SUBSCRIPTION).
  * 3. Minimum purchase and minimum quantity thresholds.
- * 4. Usage limit verification with row-level locking (FOR UPDATE) to prevent race conditions.
+ * 4. Usage limit verification with row-level locking (FOR UPDATE) within the transaction to prevent race conditions.
  * 5. No stacking in v1: select single highest savings; deterministic tie-breaker by rule UUID.
  * 6. Percentage discounts strictly capped at <= 100%.
  */
@@ -40,28 +44,30 @@ export async function evaluateAndLockEligibleDiscount(
   input: EvaluateDiscountInput
 ): Promise<EligibleDiscountAllocation | null> {
   const { subscriptionId, periodStart, periodEnd, lines, subtotal } = input;
+  const pStart = new Date(periodStart);
+  const pEnd = new Date(periodEnd);
 
-  // 1. Fetch potential discount rules linked to this subscription OR active in catalog
+  // 1. Fetch potential discount rules linked to this subscription OR in catalog
   const subDiscounts = await tx.subscriptionDiscount.findMany({
     where: { subscriptionId },
     select: { discountRuleId: true },
   });
   const linkedRuleIds = subDiscounts.map(sd => sd.discountRuleId);
 
-  // If subscription has explicitly linked rules, prioritize those; otherwise query catalog rules
+  // Notice: Do NOT filter on `isActive: true` here.
+  // Historical billing periods evaluate the rule's historical DiscountRuleActivity interval.
   const candidateRules = await tx.discountRule.findMany({
     where: {
-      isActive: true,
       ...(linkedRuleIds.length > 0 ? { id: { in: linkedRuleIds } } : {}),
       AND: [
-        { OR: [{ validFrom: null }, { validFrom: { lte: periodStart } }] },
-        { OR: [{ validUntil: null }, { validUntil: { gte: periodEnd } }] },
+        { OR: [{ validFrom: null }, { validFrom: { lte: pStart } }] },
+        { OR: [{ validUntil: null }, { validUntil: { gte: pEnd } }] },
       ],
     },
     include: {
       discountProducts: true,
       activities: {
-        orderBy: { effectiveFrom: 'desc' },
+        orderBy: { effectiveFrom: 'asc' },
       },
     },
   });
@@ -78,16 +84,23 @@ export async function evaluateAndLockEligibleDiscount(
 
   for (const rule of candidateRules) {
     // 2. Validate historical activity timeline via DiscountRuleActivity
-    const hasActiveInterval = rule.activities.some(act => {
-      const activeMatch = act.isActive === true;
-      const startMatch = act.effectiveFrom <= periodStart;
-      const endMatch = act.effectiveUntil === null || act.effectiveUntil >= periodEnd;
-      return activeMatch && startMatch && endMatch;
-    });
+    if (rule.activities.length > 0) {
+      // Find an active interval that completely covers [pStart, pEnd)
+      const coversEntirePeriod = rule.activities.some(act => {
+        if (!act.isActive) return false;
+        const startsBeforeOrAt = new Date(act.effectiveFrom) <= pStart;
+        const endsAfterOrAt = act.effectiveUntil === null || new Date(act.effectiveUntil) >= pEnd;
+        return startsBeforeOrAt && endsAfterOrAt;
+      });
 
-    // If activities exist, rule must satisfy historical coverage
-    if (rule.activities.length > 0 && !hasActiveInterval) {
-      continue;
+      if (!coversEntirePeriod) {
+        continue;
+      }
+    } else {
+      // If no activity records exist, fall back to current rule.isActive status
+      if (!rule.isActive) {
+        continue;
+      }
     }
 
     // 3. Minimum purchase threshold check
@@ -118,20 +131,18 @@ export async function evaluateAndLockEligibleDiscount(
           lineSaving = Decimal.min(rule.value, line.lineSubtotal).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
         }
 
-        allocations.set(line.subscriptionLineId || line.productId, lineSaving);
-        totalSavings = totalSavings.plus(lineSaving);
+        if (lineSaving.gt(0)) {
+          totalSavings = totalSavings.plus(lineSaving);
+          const key = line.subscriptionLineId || line.productId;
+          allocations.set(key, lineSaving);
+        }
       }
 
       if (!minQtySatisfied || totalSavings.lte(0)) {
         continue;
       }
     } else {
-      // SUBSCRIPTION scope: applies to entire subtotal
-      if (rule.minimumQuantity) {
-        const totalItems = lines.reduce((acc, l) => acc.plus(l.quantity), new Decimal(0));
-        if (totalItems.lt(rule.minimumQuantity)) continue;
-      }
-
+      // SUBSCRIPTION Scope
       if (rule.discountType === 'PERCENTAGE') {
         const pct = Decimal.min(rule.value, new Decimal('100.00'));
         totalSavings = subtotal.times(pct.dividedBy(100)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
@@ -139,24 +150,26 @@ export async function evaluateAndLockEligibleDiscount(
         totalSavings = Decimal.min(rule.value, subtotal).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
       }
 
-      if (totalSavings.lte(0)) continue;
+      if (totalSavings.lte(0)) {
+        continue;
+      }
 
-      let allocatedSum = new Decimal('0.00');
-      lines.forEach((l, idx) => {
-        const key = l.subscriptionLineId || l.productId;
-        if (idx === lines.length - 1) {
-          allocations.set(key, totalSavings.minus(allocatedSum));
+      // Distribute proportionally across lines for line item breakdown
+      let distributed = new Decimal('0.00');
+      lines.forEach((line, index) => {
+        const key = line.subscriptionLineId || line.productId;
+        if (index === lines.length - 1) {
+          allocations.set(key, totalSavings.minus(distributed));
         } else {
-          const ratio = subtotal.gt(0) ? l.lineSubtotal.dividedBy(subtotal) : new Decimal(0);
-          const linePortion = totalSavings.times(ratio).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
-          allocations.set(key, linePortion);
-          allocatedSum = allocatedSum.plus(linePortion);
+          const share = totalSavings.times(line.lineSubtotal).dividedBy(subtotal).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+          distributed = distributed.plus(share);
+          allocations.set(key, share);
         }
       });
     }
 
-    // 5. Check finite usage limit with row-level lock
-    if (rule.usageLimit !== null) {
+    // 5. Concurrency control for usageLimit: acquire row-level lock on DiscountRule
+    if (rule.usageLimit !== null && rule.usageLimit !== undefined) {
       await tx.$queryRaw`SELECT "id" FROM "discount_rules" WHERE "id" = ${rule.id}::uuid FOR UPDATE`;
 
       const usageCount = await tx.discountRedemption.count({

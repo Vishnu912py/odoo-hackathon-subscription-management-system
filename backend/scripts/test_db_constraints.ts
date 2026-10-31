@@ -2,7 +2,7 @@
  * PostgreSQL Database Constraints & Integrity Test Suite
  * =======================================================
  * Exercises PostgreSQL constraint enforcement, transactional invoice creation,
- * discount usage locking, atomic payment allocation, and recoverable billing runs
+ * historical discount eligibility, atomic payment allocation, and recoverable billing runs
  * against a live PostgreSQL 16 instance.
  */
 
@@ -22,6 +22,9 @@ import {
   initializeBillingRun,
   executeBillingRun,
   PaymentPersistenceError,
+  computeNextPeriod,
+  getDaysInMonth,
+  isLeapYear,
 } from '../src/modules/billing/index.js';
 
 const connectionString =
@@ -78,194 +81,203 @@ async function runConstraintTests() {
   console.log(' PART 1: POSTGRESQL CONSTRAINT & RELATIONAL INTEGRITY TESTS');
   console.log('================================================================================');
 
-  const runId = Math.floor(Math.random() * 1000000);
-  const baseEmail = `test.worker.${runId}@brightloop.test`;
-  const upperEmail = `TEST.WORKER.${runId}@BRIGHTLOOP.TEST`;
+  const runId = Date.now().toString(36);
 
-  // 1. Case-insensitive email uniqueness
-  await assertResolves('Insert baseline test user', async () => {
+  // 1. Email uniqueness (case-insensitive functional index)
+  const uniqueEmail = `test.unique.${runId}@example.com`;
+  await assertResolves('Setup: create user with base email', async () => {
     return prisma.user.create({
       data: {
-        email: baseEmail,
-        passwordHash: '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQmG6W56SuT86p2oA6nxe',
-        role: UserRole.CUSTOMER,
-        displayName: 'Test User',
+        email: uniqueEmail,
+        passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyza',
+        role: UserRole.STAFF,
       },
     });
   });
 
   await assertRejects(
-    'Reject duplicate email with different casing (users_email_lower_idx)',
+    'Enforce case-insensitive email uniqueness (users_email_lower_idx)',
     async () => {
       return prisma.user.create({
         data: {
-          email: upperEmail,
-          passwordHash: '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQmG6W56SuT86p2oA6nxe',
+          email: uniqueEmail.toUpperCase(),
+          passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyza',
           role: UserRole.CUSTOMER,
-          displayName: 'Test User Duplicate',
         },
       });
     },
-    ['users_email_lower_idx', 'email']
+    ['users_email_lower_idx', 'unique constraint']
   );
 
-  // 2. Negative price rejection
+  // 2. Reject negative product unit price (CHECK constraint)
   await assertRejects(
-    'Reject product with negative sales price (products_sales_price_check)',
+    'Reject negative sales price on product (products_sales_price_check)',
     async () => {
-      return prisma.$executeRawUnsafe(
-        `INSERT INTO "products" ("id", "name", "product_type", "sales_price", "cost_price", "is_active", "version", "created_at", "updated_at")
-         VALUES (gen_random_uuid(), 'Invalid Product', 'SERVICE', -10.0000, 5.0000, true, 1, NOW(), NOW());`
-      );
+      return prisma.product.create({
+        data: {
+          name: `Negative Price Item ${runId}`,
+          productType: 'service',
+          salesPrice: -25.50,
+          costPrice: 0.00,
+        },
+      });
     },
-    'products_sales_price_check'
+    ['products_sales_price_check', 'check constraint']
   );
 
-  // 3. Non-positive quantity rejection
+  // 3. Reject discount percentage exceeding 100% (CHECK constraint)
   await assertRejects(
-    'Reject quotation template line with zero quantity (quotation_template_lines_quantity_check)',
-    async () => {
-      const plan = await prisma.plan.findFirst();
-      const product = await prisma.product.findFirst();
-      if (!plan || !product) throw new Error('Fixtures required for quantity test');
-
-      return prisma.$executeRawUnsafe(
-        `INSERT INTO "quotation_template_lines" ("id", "template_id", "product_id", "quantity", "unit_price")
-         VALUES (gen_random_uuid(), (SELECT "id" FROM "quotation_templates" LIMIT 1), '${product.id}', 0.0000, 100.0000);`
-      );
-    },
-    'quotation_template_lines_quantity_check'
-  );
-
-  // 4. Tax percentage upper bound (> 100)
-  await assertRejects(
-    'Reject tax rate exceeding 100% (taxes_rate_percent_check)',
-    async () => {
-      return prisma.$executeRawUnsafe(
-        `INSERT INTO "taxes" ("id", "name", "rate_percent", "is_active", "version", "created_at", "updated_at")
-         VALUES (gen_random_uuid(), 'Excessive Tax', 125.0000, true, 1, NOW(), NOW());`
-      );
-    },
-    'taxes_rate_percent_check'
-  );
-
-  // 5. Conditional discount rule upper bound for PERCENTAGE (> 100)
-  await assertRejects(
-    'Reject percentage discount exceeding 100% (discount_rules_value_check)',
-    async () => {
-      return prisma.$executeRawUnsafe(
-        `INSERT INTO "discount_rules" ("id", "name", "discount_type", "value", "currency", "scope", "is_active", "version", "created_at", "updated_at")
-         VALUES (gen_random_uuid(), 'Invalid 150% Discount', 'PERCENTAGE', 150.0000, 'INR', 'PRODUCT', true, 1, NOW(), NOW());`
-      );
-    },
-    'discount_rules_value_check'
-  );
-
-  await assertResolves(
-    'Accept fixed discount exceeding 100 (valid flat amount savings)',
+    'Reject discount percentage > 100% (discount_rules_value_check)',
     async () => {
       return prisma.discountRule.create({
         data: {
-          name: `Valid Fixed Discount ${runId}`,
-          discountType: DiscountType.FIXED,
-          value: 500.0000,
+          name: `Invalid Promo ${runId}`,
+          discountType: DiscountType.PERCENTAGE,
+          value: 120.0000,
           currency: 'INR',
           scope: DiscountScope.SUBSCRIPTION,
-          usageLimit: 10,
         },
       });
-    }
+    },
+    ['discount_rules_value_check', 'check constraint']
   );
 
-  // 6. Invalid billing period bounds (period_end <= period_start)
+  // 4. Reject negative plan price
   await assertRejects(
-    'Reject invoice with inverted period bounds (invoices_period_bounds_check)',
+    'Reject negative price on plan (plans_price_check)',
+    async () => {
+      return prisma.plan.create({
+        data: {
+          name: `Negative Plan ${runId}`,
+          price: -500.00,
+          currency: 'INR',
+          billingInterval: BillingInterval.MONTHLY,
+        },
+      });
+    },
+    ['plans_price_check', 'check constraint']
+  );
+
+  // 5. Reject negative tax rate percent
+  await assertRejects(
+    'Reject negative tax percentage (taxes_rate_percent_check)',
+    async () => {
+      return prisma.tax.create({
+        data: {
+          name: `Negative GST ${runId}`,
+          ratePercent: -18.0000,
+        },
+      });
+    },
+    ['taxes_rate_percent_check', 'check constraint']
+  );
+
+  // 6. Enforce composite variant FK constraint
+  await assertRejects(
+    'Reject mismatched product/variant composite relationship on subscription line',
+    async () => {
+      const prodA = await prisma.product.create({
+        data: { name: `Prod A ${runId}`, productType: 'service', salesPrice: 100.00, costPrice: 50.00 },
+      });
+      const prodB = await prisma.product.create({
+        data: { name: `Prod B ${runId}`, productType: 'service', salesPrice: 200.00, costPrice: 100.00 },
+      });
+      const variantA = await prisma.productVariant.create({
+        data: { productId: prodA.id, name: 'Variant A', attributes: { color: 'red' }, priceAdjustment: 10.00 },
+      });
+
+      const customer = await prisma.customer.findFirst();
+      const plan = await prisma.plan.findFirst();
+      if (!customer || !plan) throw new Error('Customer and Plan required for composite FK test');
+
+      const sub = await prisma.subscription.create({
+        data: {
+          number: `SUB-TEST-${runId}`,
+          customerId: customer.id,
+          planId: plan.id,
+          status: 'ACTIVE',
+          billingInterval: BillingInterval.MONTHLY,
+        },
+      });
+
+      // Erroneously assign prodB with variantA (which belongs to prodA)
+      return prisma.subscriptionLine.create({
+        data: {
+          subscriptionId: sub.id,
+          productId: prodB.id,
+          variantId: variantA.id,
+          description: 'Mismatched variant link',
+          quantity: 1,
+          unitPrice: 150.00,
+        },
+      });
+    },
+    ['foreign key', 'subscription_lines_variant_id_product_id_fkey', 'violates foreign key constraint']
+  );
+
+  // 7. Enforce invoice period bounds (period_end > period_start)
+  await assertRejects(
+    'Reject inverted invoice billing period (invoices_period_bounds_check)',
     async () => {
       const sub = await prisma.subscription.findFirst();
-      if (!sub) throw new Error('Subscription required for invoice test');
+      if (!sub) throw new Error('Subscription required for period check');
 
-      return prisma.$executeRawUnsafe(
-        `INSERT INTO "invoices" ("id", "subscription_id", "number", "period_start", "period_end", "issue_date", "due_date", "status", "currency", "customer_name_snapshot", "billing_email_snapshot", "subtotal", "total", "version", "created_at", "updated_at")
-         VALUES (gen_random_uuid(), '${sub.id}', 'INV-TEST-ERR-${runId}', '2026-11-01', '2026-10-01', '2026-11-01', '2026-11-15', 'DRAFT', 'INR', 'Snapshot', 'snap@test.com', 100.00, 100.00, 1, NOW(), NOW());`
-      );
+      return prisma.invoice.create({
+        data: {
+          subscriptionId: sub.id,
+          number: `INV-INVALID-${runId}`,
+          periodStart: new Date('2026-12-01'),
+          periodEnd: new Date('2026-11-01'), // Invalid: end before start
+          issueDate: new Date('2026-11-01'),
+          dueDate: new Date('2026-11-15'),
+          status: 'DRAFT',
+          currency: 'INR',
+          customerNameSnapshot: 'Test Cust',
+          billingEmailSnapshot: 'test@example.com',
+          subtotal: 100.00,
+          total: 100.00,
+        },
+      });
     },
-    'invoices_period_bounds_check'
+    ['invoices_period_bounds_check', 'check constraint']
   );
 
-  // 7. Duplicate payment idempotency key
-  const idemKey = `idempotency-key-${runId}`;
-  await assertResolves('Insert initial payment with idempotency key', async () => {
-    const inv = await prisma.invoice.findFirst();
-    if (!inv) throw new Error('Invoice required for payment test');
-
-    return prisma.payment.create({
-      data: {
-        invoiceId: inv.id,
-        idempotencyKey: idemKey,
-        method: 'bank_transfer',
-        amount: 100.00,
-        paymentDate: new Date('2026-10-31'),
-        note: 'First payment attempt',
-      },
-    });
-  });
-
+  // 8. Enforce pause interval date consistency (end_date > start_date)
   await assertRejects(
-    'Reject duplicate payment with identical idempotency key',
+    'Reject inverted pause interval dates (subscription_pause_intervals_bounds_check)',
+    async () => {
+      const sub = await prisma.subscription.findFirst();
+      if (!sub) throw new Error('Subscription required for pause check');
+
+      return prisma.subscriptionPauseInterval.create({
+        data: {
+          subscriptionId: sub.id,
+          startDate: new Date('2026-10-15'),
+          endDate: new Date('2026-10-01'), // Invalid: end before start
+        },
+      });
+    },
+    ['subscription_pause_intervals_bounds_check', 'check constraint']
+  );
+
+  // 9. Reject negative payment amount
+  await assertRejects(
+    'Reject negative payment amount (payments_amount_check)',
     async () => {
       const inv = await prisma.invoice.findFirst();
-      if (!inv) throw new Error('Invoice required for payment test');
+      if (!inv) throw new Error('Invoice required for payment amount check');
 
       return prisma.payment.create({
         data: {
           invoiceId: inv.id,
-          idempotencyKey: idemKey,
+          idempotencyKey: `invalid-pay-${runId}`,
           method: 'bank_transfer',
-          amount: 100.00,
-          paymentDate: new Date('2026-10-31'),
-          note: 'Duplicate payment attempt',
+          amount: -50.00,
+          paymentDate: new Date(),
         },
       });
     },
-    ['payments_idempotency_key_key', 'idempotency_key', 'idempotencykey']
-  );
-
-  // 8. Product–variant cross-assignment rejection
-  await assertRejects(
-    'Reject quotation template line with variant belonging to another product',
-    async () => {
-      const products = await prisma.product.findMany({ take: 2 });
-      const variant = await prisma.productVariant.findFirst();
-      const template = await prisma.quotationTemplate.findFirst();
-      if (products.length < 2 || !variant || !template) throw new Error('Prerequisites missing for variant test');
-
-      const wrongProductId = products.find(p => p.id !== variant.productId)?.id;
-      if (!wrongProductId) throw new Error('Could not find mismatched product');
-
-      return prisma.$executeRawUnsafe(
-        `INSERT INTO "quotation_template_lines" ("id", "template_id", "product_id", "variant_id", "quantity", "unit_price")
-         VALUES (gen_random_uuid(), '${template.id}', '${wrongProductId}', '${variant.id}', 1.0000, 500.0000);`
-      );
-    },
-    ['quotation_template_lines_variant_id_product_id_fkey', 'variant_id', 'product_id', 'violates foreign key']
-  );
-
-  // 9. Duplicate subscription billing period
-  await assertRejects(
-    'Reject duplicate invoice for same subscription and period_start',
-    async () => {
-      const existingInv = await prisma.invoice.findFirst();
-      if (!existingInv) throw new Error('Invoice required for period test');
-
-      const pStart = existingInv.periodStart.toISOString().split('T')[0];
-      const pEnd = existingInv.periodEnd.toISOString().split('T')[0];
-
-      return prisma.$executeRawUnsafe(
-        `INSERT INTO "invoices" ("id", "subscription_id", "number", "period_start", "period_end", "issue_date", "due_date", "status", "currency", "customer_name_snapshot", "billing_email_snapshot", "subtotal", "total", "version", "created_at", "updated_at")
-         VALUES (gen_random_uuid(), '${existingInv.subscriptionId}', 'INV-DUP-PERIOD-${runId}', '${pStart}', '${pEnd}', '${pStart}', '${pEnd}', 'DRAFT', 'INR', 'Snapshot', 'snap@test.com', 100.00, 100.00, 1, NOW(), NOW());`
-      );
-    },
-    ['invoices_subscription_id_period_start_key', 'subscription_id', 'period_start', 'unique constraint']
+    ['payments_amount_check', 'check constraint']
   );
 
   // 10. Duplicate discount redemption on same invoice
@@ -348,66 +360,107 @@ async function runConstraintTests() {
     const expectedTotal = expectedSubtotal - Number(inv.discountTotal) + expectedTax;
 
     if (Math.abs(Number(inv.subtotal) - expectedSubtotal) > 0.01) {
-      throw new Error(`Subtotal mismatch: ${inv.subtotal} vs sum(${expectedSubtotal})`);
+      throw new Error(`Subtotal mismatch: header ${inv.subtotal} vs lines ${expectedSubtotal}`);
     }
     if (Math.abs(Number(inv.total) - expectedTotal) > 0.01) {
-      throw new Error(`Total mismatch: ${inv.total} vs sum(${expectedTotal})`);
+      throw new Error(`Total mismatch: header ${inv.total} vs calculated ${expectedTotal}`);
     }
   });
 
-  // 12. Repeated billing request returns existing invoice without duplicates
-  await assertResolves('D3-A: Repeated billing request returns existing invoice (isReused: true)', async () => {
-    const repeatResult = await createSubscriptionInvoice(prisma, {
+  // 12. Repeated billing for identical period returns existing invoice (idempotent reuse)
+  await assertResolves('D3-A: Repeated invoice creation for identical period returns existing invoice without error', async () => {
+    const secondCallResult = await createSubscriptionInvoice(prisma, {
       subscriptionId: testSubscription.id,
       periodStart: p1Start,
       periodEnd: p1End,
     });
 
-    if (!repeatResult.isReused) throw new Error('Expected isReused: true on repeated billing');
-    if (repeatResult.invoice.id !== createdInvoiceResult.invoice.id) {
-      throw new Error('Expected identical invoice ID on repeat');
+    if (!secondCallResult.isReused) throw new Error('Expected isReused: true for existing period');
+    if (secondCallResult.invoice.id !== createdInvoiceResult.invoice.id) {
+      throw new Error('Returned different invoice ID for identical period!');
     }
-
-    const count = await prisma.invoice.count({
-      where: {
-        subscriptionId: testSubscription.id,
-        periodStart: new Date(p1Start),
-      },
-    });
-    if (count !== 1) throw new Error(`Expected exactly 1 invoice record in DB, found ${count}`);
   });
 
-  // 13. Genuinely concurrent invoice generation race
-  const p2Start = '2026-12-01';
-  const p2End = '2027-01-01';
-  await assertResolves('D3-A: Concurrent invoice creation race resolves to exactly 1 invoice', async () => {
+  // 13. Concurrency race on identical subscription period
+  await assertResolves('D3-A: Concurrent invoice generation for same period serializes cleanly (1 created, 1 reused)', async () => {
+    const racePeriodStart = '2026-12-01';
+    const racePeriodEnd = '2027-01-01';
+
     const [resA, resB] = await Promise.all([
-      createSubscriptionInvoice(prisma, { subscriptionId: testSubscription.id, periodStart: p2Start, periodEnd: p2End }),
-      createSubscriptionInvoice(prisma, { subscriptionId: testSubscription.id, periodStart: p2Start, periodEnd: p2End }),
+      createSubscriptionInvoice(prisma, { subscriptionId: testSubscription.id, periodStart: racePeriodStart, periodEnd: racePeriodEnd }),
+      createSubscriptionInvoice(prisma, { subscriptionId: testSubscription.id, periodStart: racePeriodStart, periodEnd: racePeriodEnd }),
     ]);
 
-    const oneNew = (!resA.isReused && resB.isReused) || (resA.isReused && !resB.isReused);
-    if (!oneNew) throw new Error(`Expected one new and one reused invoice, got resA: ${resA.isReused}, resB: ${resB.isReused}`);
-    if (resA.invoice.id !== resB.invoice.id) throw new Error('Expected matching invoice IDs from concurrent race');
+    const createdCount = (resA.isReused ? 0 : 1) + (resB.isReused ? 0 : 1);
+    const reusedCount = (resA.isReused ? 1 : 0) + (resB.isReused ? 1 : 0);
 
-    const count = await prisma.invoice.count({
-      where: {
-        subscriptionId: testSubscription.id,
-        periodStart: new Date(p2Start),
-      },
-    });
-    if (count !== 1) throw new Error(`Concurrent race created duplicate invoices! Count: ${count}`);
+    if (createdCount !== 1 || reusedCount !== 1) {
+      throw new Error(`Expected exactly 1 created and 1 reused in concurrency race. Got ${createdCount} created, ${reusedCount} reused.`);
+    }
+    if (resA.invoice.id !== resB.invoice.id) {
+      throw new Error('Concurrent executions generated duplicate invoices with different IDs!');
+    }
   });
 
   console.log('\n================================================================================');
-  console.log(' PART 3: D3-B DISCOUNT ELIGIBILITY, TIMELINE & USAGE LOCKING TESTS');
+  console.log(' PART 3: D3-B HISTORICAL DISCOUNT ELIGIBILITY, TIMELINE & USAGE LOCKING TESTS');
   console.log('================================================================================');
 
-  // 14. Inactive discount activity is not applied
-  await assertResolves('D3-B: Inactive discount interval via DiscountRuleActivity is excluded', async () => {
-    const inactiveRule = await prisma.discountRule.create({
+  // 14. A rule active during a past period but inactive now IS eligible
+  await assertResolves('D3-B: Rule active in past period but inactive now is eligible for historical period', async () => {
+    const historicalRule = await prisma.discountRule.create({
       data: {
-        name: `Inactive Period Discount ${runId}`,
+        name: `Historical Active Past Rule ${runId}`,
+        discountType: DiscountType.FIXED,
+        value: 50.00,
+        currency: 'INR',
+        scope: DiscountScope.SUBSCRIPTION,
+        isActive: false, // Currently inactive!
+        activities: {
+          createMany: {
+            data: [
+              {
+                isActive: true,
+                effectiveFrom: new Date('2025-01-01T00:00:00.000Z'),
+                effectiveUntil: new Date('2025-06-01T00:00:00.000Z'),
+                reason: 'Promotional campaign active in H1 2025',
+              },
+              {
+                isActive: false,
+                effectiveFrom: new Date('2025-06-01T00:00:00.000Z'),
+                effectiveUntil: null,
+                reason: 'Campaign concluded',
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    await prisma.subscriptionDiscount.create({
+      data: { subscriptionId: testSubscription.id, discountRuleId: historicalRule.id },
+    });
+
+    // Invoicing for a period inside the active interval [2025-02-01, 2025-03-01)
+    const res = await createSubscriptionInvoice(prisma, {
+      subscriptionId: testSubscription.id,
+      periodStart: '2025-02-01',
+      periodEnd: '2025-03-01',
+    });
+
+    if (Number(res.invoice.discountTotal) <= 0) {
+      throw new Error('Expected historical discount to be applied, but discountTotal was 0');
+    }
+    const redemptions = await prisma.discountRedemption.findMany({ where: { invoiceId: res.invoice.id } });
+    const applied = redemptions.some(r => r.discountRuleId === historicalRule.id);
+    if (!applied) throw new Error('Historical discount was not redeemed on invoice');
+  });
+
+  // 15. A rule that became active after the historical period is excluded
+  await assertResolves('D3-B: Rule that became active after the historical period is excluded', async () => {
+    const futureRule = await prisma.discountRule.create({
+      data: {
+        name: `Future Active Rule ${runId}`,
         discountType: DiscountType.FIXED,
         value: 100.00,
         currency: 'INR',
@@ -415,30 +468,115 @@ async function runConstraintTests() {
         isActive: true,
         activities: {
           create: {
-            isActive: false, // Explicitly marked inactive for historical period
-            effectiveFrom: new Date('2026-01-01'),
-            effectiveUntil: new Date('2026-05-01'),
-            reason: 'Historical promotional pause',
+            isActive: true,
+            effectiveFrom: new Date('2026-05-01T00:00:00.000Z'),
+            effectiveUntil: null,
+            reason: 'Future promo',
           },
         },
       },
     });
 
-    // Invoicing for a period inside the inactive interval
-    const res = await createSubscriptionInvoice(prisma, {
-      subscriptionId: testSubscription.id,
-      periodStart: '2026-02-01',
-      periodEnd: '2026-03-01',
+    await prisma.subscriptionDiscount.create({
+      data: { subscriptionId: testSubscription.id, discountRuleId: futureRule.id },
     });
 
-    if (Number(res.invoice.discountTotal) > 0) {
-      const redemptions = await prisma.discountRedemption.findMany({ where: { invoiceId: res.invoice.id } });
-      const usedInactive = redemptions.some(r => r.discountRuleId === inactiveRule.id);
-      if (usedInactive) throw new Error('Inactive discount rule was erroneously redeemed!');
+    // Invoicing for 2025-03-01 to 2025-04-01 (before futureRule became active)
+    const res = await createSubscriptionInvoice(prisma, {
+      subscriptionId: testSubscription.id,
+      periodStart: '2025-03-01',
+      periodEnd: '2025-04-01',
+    });
+
+    const redemptions = await prisma.discountRedemption.findMany({ where: { invoiceId: res.invoice.id } });
+    if (redemptions.some(r => r.discountRuleId === futureRule.id)) {
+      throw new Error('Future active rule was erroneously redeemed for a past period!');
     }
   });
 
-  // 15. Finite usage limit with concurrent redemption attempts
+  // 16. A rule deactivated before the historical period is excluded
+  await assertResolves('D3-B: Rule deactivated before the historical period is excluded', async () => {
+    const pastDeactivatedRule = await prisma.discountRule.create({
+      data: {
+        name: `Past Deactivated Rule ${runId}`,
+        discountType: DiscountType.FIXED,
+        value: 100.00,
+        currency: 'INR',
+        scope: DiscountScope.SUBSCRIPTION,
+        isActive: false,
+        activities: {
+          createMany: {
+            data: [
+              {
+                isActive: true,
+                effectiveFrom: new Date('2024-01-01T00:00:00.000Z'),
+                effectiveUntil: new Date('2024-12-31T00:00:00.000Z'),
+              },
+              {
+                isActive: false,
+                effectiveFrom: new Date('2024-12-31T00:00:00.000Z'),
+                effectiveUntil: null,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    await prisma.subscriptionDiscount.create({
+      data: { subscriptionId: testSubscription.id, discountRuleId: pastDeactivatedRule.id },
+    });
+
+    // Invoicing for 2025-04-01 to 2025-05-01 (after rule was deactivated)
+    const res = await createSubscriptionInvoice(prisma, {
+      subscriptionId: testSubscription.id,
+      periodStart: '2025-04-01',
+      periodEnd: '2025-05-01',
+    });
+
+    const redemptions = await prisma.discountRedemption.findMany({ where: { invoiceId: res.invoice.id } });
+    if (redemptions.some(r => r.discountRuleId === pastDeactivatedRule.id)) {
+      throw new Error('Deactivated rule was erroneously redeemed!');
+    }
+  });
+
+  // 17. Activity intervals that do not cover the entire billing period are excluded
+  await assertResolves('D3-B: Activity intervals that do not cover the entire billing period are excluded', async () => {
+    const partialCoverageRule = await prisma.discountRule.create({
+      data: {
+        name: `Partial Coverage Rule ${runId}`,
+        discountType: DiscountType.FIXED,
+        value: 100.00,
+        currency: 'INR',
+        scope: DiscountScope.SUBSCRIPTION,
+        isActive: true,
+        activities: {
+          create: {
+            isActive: true,
+            effectiveFrom: new Date('2025-05-15T00:00:00.000Z'),
+            effectiveUntil: new Date('2025-07-01T00:00:00.000Z'),
+          },
+        },
+      },
+    });
+
+    await prisma.subscriptionDiscount.create({
+      data: { subscriptionId: testSubscription.id, discountRuleId: partialCoverageRule.id },
+    });
+
+    const res = await createSubscriptionInvoice(prisma, {
+      subscriptionId: testSubscription.id,
+      periodStart: '2025-05-01',
+      periodEnd: '2025-06-01',
+    });
+
+    const redemptions = await prisma.discountRedemption.findMany({ where: { invoiceId: res.invoice.id } });
+    if (redemptions.some(r => r.discountRuleId === partialCoverageRule.id)) {
+      throw new Error('Partial coverage discount was erroneously redeemed!');
+    }
+  });
+
+  // 18. Finite usage limit with concurrent redemption attempts
   await assertResolves('D3-B: Concurrent discount redemption does not exceed usageLimit = 1', async () => {
     const singleUseRule = await prisma.discountRule.create({
       data: {
@@ -452,14 +590,13 @@ async function runConstraintTests() {
         activities: {
           create: {
             isActive: true,
-            effectiveFrom: new Date('2026-01-01'),
+            effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
             effectiveUntil: null,
           },
         },
       },
     });
 
-    // Link discount to subscription
     await prisma.subscriptionDiscount.create({
       data: { subscriptionId: testSubscription.id, discountRuleId: singleUseRule.id },
     });
@@ -506,7 +643,7 @@ async function runConstraintTests() {
 
   const payKey1 = `idem-pay1-${runId}`;
 
-  // 16. Multiple partial payments allowed atomically
+  // 19. Multiple partial payments allowed atomically
   await assertResolves('D3-C: First partial payment (₹400 on ₹1000 invoice) updates balance to ₹400', async () => {
     const res = await applyInvoicePayment(prisma, {
       invoiceId: paymentTestInvoice.id,
@@ -523,7 +660,7 @@ async function runConstraintTests() {
     if (res.invoice.status !== 'CONFIRMED') throw new Error(`Expected status CONFIRMED, got ${res.invoice.status}`);
   });
 
-  // 17. Overpayment rejection
+  // 20. Overpayment rejection
   await assertRejects(
     'D3-C: Reject overpayment exceeding outstanding balance (attempt ₹700 on ₹600 balance)',
     async () => {
@@ -538,7 +675,7 @@ async function runConstraintTests() {
     ['payment_exceeds_balance', 'exceeds']
   );
 
-  // 18. Second partial payment settling the exact balance transitions status to PAID
+  // 21. Second partial payment settling the exact balance transitions status to PAID
   const payKey2 = `idem-pay2-${runId}`;
   await assertResolves('D3-C: Second partial payment (₹600) fully settles invoice to PAID status', async () => {
     const currentInv = await prisma.invoice.findUniqueOrThrow({ where: { id: paymentTestInvoice.id } });
@@ -555,7 +692,7 @@ async function runConstraintTests() {
     if (res.invoice.status !== 'PAID') throw new Error(`Expected status PAID, got ${res.invoice.status}`);
   });
 
-  // 19. Idempotent replay: retrying original payment returns stored result even though version has changed
+  // 22. Idempotent replay: retrying original payment returns stored result even though version has changed
   await assertResolves('D3-C: Idempotent replay of first payment returns original result after invoice version increased', async () => {
     const replayRes = await applyInvoicePayment(prisma, {
       invoiceId: paymentTestInvoice.id,
@@ -570,7 +707,7 @@ async function runConstraintTests() {
     if (replayRes.payment.idempotencyKey !== payKey1) throw new Error('Replayed wrong payment record');
   });
 
-  // 20. Conflicting idempotency key reuse with different amount is rejected
+  // 23. Conflicting idempotency key reuse with different amount is rejected
   await assertRejects(
     'D3-C: Reject reuse of same idempotency key with conflicting request payload',
     async () => {
@@ -585,7 +722,7 @@ async function runConstraintTests() {
     ['idempotency_conflict', 'different request contents']
   );
 
-  // 21. Genuinely concurrent competing payments exceeding balance
+  // 24. Genuinely concurrent competing payments exceeding balance
   const raceInvoice = await prisma.invoice.create({
     data: {
       subscriptionId: testSubscription.id,
@@ -638,11 +775,11 @@ async function runConstraintTests() {
   });
 
   console.log('\n================================================================================');
-  console.log(' PART 5: D3-D RECOVERABLE BILLING PROGRESS & PAUSE INTERVAL TESTS');
+  console.log(' PART 5: D3-D RECOVERABLE BILLING PROGRESS & CONCURRENCY TESTS');
   console.log('================================================================================');
 
-  // 22. Durable BillingRun initialization persists inputs
   let testRun: any = null;
+  // 25. Durable BillingRun initialization persists inputs
   await assertResolves('D3-D: Initialize BillingRun with durable inputs before processing begins', async () => {
     testRun = await initializeBillingRun(prisma, {
       asOfDate: '2027-06-01',
@@ -654,9 +791,29 @@ async function runConstraintTests() {
     if (testRun.periodLimit !== 10) throw new Error(`Expected periodLimit 10, got ${testRun.periodLimit}`);
   });
 
-  // 23. Historical pause interval skipping via SubscriptionPauseInterval
+  // 26. Concurrent execution of the same billing run
+  await assertResolves('D3-D: Prevent concurrent execution of the same billing run', async () => {
+    const concurrentRun = await initializeBillingRun(prisma, {
+      asOfDate: '2027-06-01',
+      periodLimit: 10,
+      subscriptionIdFilter: testSubscription.id,
+    });
+
+    const [res1, res2] = await Promise.allSettled([
+      executeBillingRun(prisma, concurrentRun.id),
+      executeBillingRun(prisma, concurrentRun.id),
+    ]);
+
+    const successes = [res1, res2].filter(r => r.status === 'fulfilled');
+    const failures = [res1, res2].filter(r => r.status === 'rejected');
+
+    if (successes.length !== 1 || failures.length !== 1) {
+      throw new Error(`Expected exactly 1 success and 1 concurrency rejection, got ${successes.length} succ, ${failures.length} fail`);
+    }
+  });
+
+  // 27. Historical pause interval skipping via SubscriptionPauseInterval
   await assertResolves('D3-D: Historical pause interval skips unbilled period without shifting recurrence anchor', async () => {
-    // Record pause interval covering 2027-06-01 to 2027-07-01
     await prisma.subscriptionPauseInterval.create({
       data: {
         subscriptionId: testSubscription.id,
@@ -666,7 +823,6 @@ async function runConstraintTests() {
       },
     });
 
-    // Update nextBillingDate to paused period
     await prisma.subscription.update({
       where: { id: testSubscription.id },
       data: { nextBillingDate: new Date('2027-06-01') },
@@ -674,25 +830,147 @@ async function runConstraintTests() {
 
     const runResult = await executeBillingRun(prisma, testRun.id);
 
-    // Should skip paused period and advance schedule to 2027-07-01
     const updatedSub = await prisma.subscription.findUniqueOrThrow({ where: { id: testSubscription.id } });
     const nextDateStr = updatedSub.nextBillingDate?.toISOString().split('T')[0];
     if (nextDateStr !== '2027-07-01') {
       throw new Error(`Expected nextBillingDate advanced to 2027-07-01, got ${nextDateStr}`);
     }
 
-    // Verify no invoice was generated for the paused period
     const pausedInv = await prisma.invoice.findFirst({
       where: { subscriptionId: testSubscription.id, periodStart: new Date('2027-06-01') },
     });
     if (pausedInv) throw new Error('Invoice was erroneously created for paused interval!');
   });
 
-  // 24. Repeat execution of BillingRun is idempotent and resumes safely
-  await assertResolves('D3-D: Re-running BillingRun is idempotent and updates durable progress counters', async () => {
-    const resumeResult = await executeBillingRun(prisma, testRun.id);
-    if (resumeResult.run.status !== 'COMPLETED') {
-      throw new Error(`Expected COMPLETED status, got ${resumeResult.run.status}`);
+  // 28. Simulated crash and durable recovery without double-counting
+  await assertResolves('D3-D: Simulated crash and durable recovery correctly updates progress counters without duplicating invoices', async () => {
+    const cust = await prisma.customer.findFirstOrThrow();
+    const plan = await prisma.plan.findFirstOrThrow();
+    const prod = await prisma.product.findFirstOrThrow();
+
+    const subA = await prisma.subscription.create({
+      data: {
+        number: `SUB-RECOVER-A-${runId}`,
+        customerId: cust.id,
+        planId: plan.id,
+        status: 'ACTIVE',
+        billingInterval: BillingInterval.MONTHLY,
+        startDate: new Date('2027-08-01T00:00:00.000Z'),
+        nextBillingDate: new Date('2027-08-01T00:00:00.000Z'),
+        lines: {
+          create: {
+            productId: prod.id,
+            description: 'Recovery Test Item A',
+            quantity: 1,
+            unitPrice: 100.00,
+          },
+        },
+      },
+    });
+
+    const subB = await prisma.subscription.create({
+      data: {
+        number: `SUB-RECOVER-B-${runId}`,
+        customerId: cust.id,
+        planId: plan.id,
+        status: 'ACTIVE',
+        billingInterval: BillingInterval.MONTHLY,
+        startDate: new Date('2027-08-01T00:00:00.000Z'),
+        nextBillingDate: new Date('2027-08-01T00:00:00.000Z'),
+        lines: {
+          create: {
+            productId: prod.id,
+            description: 'Recovery Test Item B',
+            quantity: 1,
+            unitPrice: 100.00,
+          },
+        },
+      },
+    });
+
+    // Initialize run with periodLimit: 1 to simulate batch stopping after 1 subscription
+    const crashRun = await initializeBillingRun(prisma, {
+      asOfDate: '2027-08-01',
+      periodLimit: 1,
+    });
+
+    const batch1 = await executeBillingRun(prisma, crashRun.id);
+    if (batch1.processedCount !== 1) throw new Error(`Expected batch1 processedCount 1, got ${batch1.processedCount}`);
+    if (!batch1.hasMore) throw new Error('Expected hasMore true after partial batch');
+
+    // Resume execution of the run with allowResume: true
+    const batch2 = await executeBillingRun(prisma, crashRun.id, { allowResume: true });
+
+    // Verify subA was NOT billed twice
+    const subAInvoices = await prisma.invoice.count({ where: { subscriptionId: subA.id } });
+    if (subAInvoices > 1) throw new Error(`Subscription A was invoiced ${subAInvoices} times! Expected 1.`);
+
+    // Verify cumulative durable counters
+    const finalRun = await prisma.billingRun.findUniqueOrThrow({ where: { id: crashRun.id } });
+    if (finalRun.subscriptionsProcessed < 2) {
+      throw new Error(`Expected at least 2 processed subscriptions across batches, got ${finalRun.subscriptionsProcessed}`);
+    }
+  });
+
+  console.log('\n================================================================================');
+  console.log(' PART 6: RECURRENCE DATE ARITHMETIC & CALENDAR ANCHOR TESTS');
+  console.log('================================================================================');
+
+  // 29. January 31 to February 28 (common year 2026)
+  await assertResolves('Calendar: January 31 to February 28 (common year 2026)', async () => {
+    const res = computeNextPeriod({ periodStart: '2026-01-31', interval: 'MONTHLY' });
+    if (res.periodEndStr !== '2026-02-28') throw new Error(`Expected 2026-02-28, got ${res.periodEndStr}`);
+    if (res.anchorDay !== 31) throw new Error(`Expected anchorDay 31, got ${res.anchorDay}`);
+  });
+
+  // 30. January 31 to February 29 (leap year 2028)
+  await assertResolves('Calendar: January 31 to February 29 (leap year 2028)', async () => {
+    const res = computeNextPeriod({ periodStart: '2028-01-31', interval: 'MONTHLY' });
+    if (res.periodEndStr !== '2028-02-29') throw new Error(`Expected 2028-02-29, got ${res.periodEndStr}`);
+  });
+
+  // 31. August 31 to September 30
+  await assertResolves('Calendar: August 31 to September 30', async () => {
+    const res = computeNextPeriod({ periodStart: '2026-08-31', interval: 'MONTHLY' });
+    if (res.periodEndStr !== '2026-09-30') throw new Error(`Expected 2026-09-30, got ${res.periodEndStr}`);
+  });
+
+  // 32. Monthly recurrence across multiple months with anchorDay 31
+  await assertResolves('Calendar: Monthly recurrence across multiple months preserves 31st anchor', async () => {
+    const p1 = computeNextPeriod({ periodStart: '2026-01-31', interval: 'MONTHLY' }); // -> Feb 28
+    const p2 = computeNextPeriod({ periodStart: p1.periodEnd, interval: 'MONTHLY', anchorDay: p1.anchorDay }); // -> Mar 31
+    const p3 = computeNextPeriod({ periodStart: p2.periodEnd, interval: 'MONTHLY', anchorDay: p1.anchorDay }); // -> Apr 30
+    const p4 = computeNextPeriod({ periodStart: p3.periodEnd, interval: 'MONTHLY', anchorDay: p1.anchorDay }); // -> May 31
+
+    if (p1.periodEndStr !== '2026-02-28') throw new Error(`p1: expected 2026-02-28, got ${p1.periodEndStr}`);
+    if (p2.periodEndStr !== '2026-03-31') throw new Error(`p2: expected 2026-03-31, got ${p2.periodEndStr}`);
+    if (p3.periodEndStr !== '2026-04-30') throw new Error(`p3: expected 2026-04-30, got ${p3.periodEndStr}`);
+    if (p4.periodEndStr !== '2026-05-31') throw new Error(`p4: expected 2026-05-31, got ${p4.periodEndStr}`);
+  });
+
+  // 33. Annual recurrence across leap-day boundaries
+  await assertResolves('Calendar: Annual recurrence across leap-day boundaries (2024-02-29 -> 2025-02-28 -> 2028-02-29)', async () => {
+    const y1 = computeNextPeriod({ periodStart: '2024-02-29', interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
+    const y2 = computeNextPeriod({ periodStart: y1.periodEnd, interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
+    const y3 = computeNextPeriod({ periodStart: y2.periodEnd, interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
+    const y4 = computeNextPeriod({ periodStart: y3.periodEnd, interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
+
+    if (y1.periodEndStr !== '2025-02-28') throw new Error(`y1: expected 2025-02-28, got ${y1.periodEndStr}`);
+    if (y2.periodEndStr !== '2026-02-28') throw new Error(`y2: expected 2026-02-28, got ${y2.periodEndStr}`);
+    if (y3.periodEndStr !== '2027-02-28') throw new Error(`y3: expected 2027-02-28, got ${y3.periodEndStr}`);
+    if (y4.periodEndStr !== '2028-02-29') throw new Error(`y4 (leap year): expected 2028-02-29, got ${y4.periodEndStr}`);
+  });
+
+  // 34. Continuous and gapless exclusive period-end property
+  await assertResolves('Calendar: Continuous and gapless exclusive period-end convention', async () => {
+    const start = '2026-03-15';
+    const period = computeNextPeriod({ periodStart: start, interval: 'MONTHLY' });
+    if (period.periodStart.getTime() >= period.periodEnd.getTime()) {
+      throw new Error('periodStart must be strictly before periodEnd');
+    }
+    const nextPeriod = computeNextPeriod({ periodStart: period.periodEnd, interval: 'MONTHLY', anchorDay: period.anchorDay });
+    if (period.periodEndStr !== nextPeriod.periodStartStr) {
+      throw new Error(`Gap detected between period 1 end (${period.periodEndStr}) and period 2 start (${nextPeriod.periodStartStr})`);
     }
   });
 

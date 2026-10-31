@@ -1,18 +1,19 @@
 # Database & Persistence Layer Handoff (D3)
 
-**Author:** Zenfox-690 (Database Specialist)  
-**Target:** Vishnu912py (Backend Lead & Architect)  
-**Date:** October 31, 2026  
-**Branch:** `feat/db-persistence`
+- **Author:** Zenfox-690 (Database Specialist)
+- **Target:** Vishnu912py (Backend Lead & Architect)
+- **Date:** October 31, 2026
+- **Branch:** `feat/db-persistence`
+- **PR:** [#9](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/9)
 
 ---
 
 ## 1. Overview & Architectural Boundaries
 
-This document defines the persistence operations, transaction boundaries, concurrency controls, and invocation signatures provided for Phase D3 (**Transactional Billing Persistence and Reliability**).
+This document defines the persistence operations, transaction boundaries, concurrency controls, recurrence date arithmetic, and invocation signatures provided for Phase D3 (**Transactional Billing Persistence and Reliability**).
 
 ### Separation of Concerns:
-- **Zenfox-690 (Database Layer):** Data access queries, transactional boundaries, PostgreSQL row-level and advisory locking, exact decimal calculations, idempotent writes, historical snapshots, and database integration tests.
+- **Zenfox-690 (Database Layer):** Data access queries, transactional boundaries, PostgreSQL row-level and advisory locking, exact decimal calculations, calendar recurrence arithmetic, idempotent writes, historical snapshots, and database integration tests.
 - **Vishnu912py (Backend / Express Layer):** HTTP route handlers, authentication, role and customer ownership authorization, request body/header parsing (`If-Match`, `Idempotency-Key`), error mapping, and background workflow triggers.
 
 All persistence modules are located in `backend/src/modules/billing/` and exported via `backend/src/modules/billing/index.js`.
@@ -33,35 +34,18 @@ export async function createSubscriptionInvoice(
 ): Promise<CreateInvoiceResult>
 ```
 
-#### Parameters (`CreateInvoiceParams`):
-| Field | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `subscriptionId` | `string` (UUID) | Yes | Target subscription ID |
-| `periodStart` | `Date \| string` | Yes | Billing period start (inclusive) |
-| `periodEnd` | `Date \| string` | Yes | Billing period end (exclusive) |
-| `issueDate` | `Date \| string` | No | Invoice issue date (defaults to `periodStart`) |
-| `dueDate` | `Date \| string` | No | Due date (computed from payment term if omitted) |
-| `invoiceNumber` | `string` | No | Explicit invoice number (generated if omitted) |
-| `actorUserId` | `string \| null` | No | ID of user initiating the creation |
-| `advanceSchedule` | `boolean` | No | If `true`, advances `subscription.nextBillingDate` to `periodEnd` |
-
-#### Return Value (`CreateInvoiceResult`):
-- `invoice`: Full `Invoice` record with nested lines, line taxes, line discounts, and redemptions.
-- `isReused`: `boolean` — `true` if an invoice already existed for `(subscription_id, period_start)`, `false` if newly created.
-- `isSkippedPaused`: `boolean` — `true` if the billing period overlaps with an effective `SubscriptionPauseInterval`.
-
 #### Concurrency & Transaction Guarantees:
-1. **Advisory Lock:** Acquires `pg_advisory_xact_lock(hashtextextended('sub_inv:' || subId || ':' || periodStart, 0))`.
+1. **Advisory Lock:** Acquires `pg_advisory_xact_lock(hashtextextended('sub_inv:' || subId || ':' || periodStartStr, 0))` within the transaction connection.
 2. **Idempotent Identity:** Enforces `UNIQUE (subscription_id, period_start)`. Concurrent duplicate billing attempts return the existing invoice with `isReused: true`.
-3. **Atomic Snapshots:** Captures `customer_name_snapshot`, `billing_email_snapshot`, `billing_address_snapshot`, `rate_percent_snapshot`, `taxable_base`, and discount snapshots.
-4. **Exact Decimal Arithmetic:** Per-line subtotals, pre-tax discount deductions, exclusive additive taxes, and final totals calculated using exact decimal arithmetic with half-up 2-decimal rounding.
+3. **Atomic Snapshots:** Captures immutable point-in-time snapshots of `customer_name_snapshot`, `billing_email_snapshot`, `billing_address_snapshot`, `rate_percent_snapshot`, `taxable_base`, and discount values.
+4. **Exact Decimal Arithmetic:** Per-line subtotals, pre-tax discount deductions, exclusive additive taxes, and final totals calculated using exact decimal arithmetic with half-up 2-decimal rounding (`ROUND_HALF_UP`).
 
 ---
 
-### B. Discount Eligibility & Usage Locking (`evaluateAndLockEligibleDiscount`)
+### B. Historical Discount Eligibility & Usage Locking (`evaluateAndLockEligibleDiscount`)
 **Module:** [`backend/src/modules/billing/discount-persistence.ts`](../backend/src/modules/billing/discount-persistence.ts)
 
-Evaluates candidate discounts, enforces historical activity, and locks usage limits.
+Evaluates candidate discounts, enforces historical activity timelines, and locks finite usage limits under concurrency.
 
 ```typescript
 export async function evaluateAndLockEligibleDiscount(
@@ -70,56 +54,36 @@ export async function evaluateAndLockEligibleDiscount(
 ): Promise<EligibleDiscountAllocation | null>
 ```
 
-#### Enforced Business Rules:
-1. **Historical Timeline:** Checks `DiscountRuleActivity` to ensure the rule had an active interval covering the specific billing period `[periodStart, periodEnd]`. Future discount changes cannot retroactively affect past invoices.
-2. **Finite Usage Locking:** If `usageLimit !== null`, acquires row lock `SELECT "id" FROM "discount_rules" WHERE "id" = $1 FOR UPDATE` and checks count against `discount_redemptions`. Prevents race conditions across concurrent workers.
-3. **Single Discount Rule (No Stacking in v1):** Selects the single rule providing the greatest monetary saving; tie-breaks deterministically using `rule.id.toLowerCase()`.
-4. **Pre-Tax Deduction:** Deducts discount from line subtotal before applying exclusive additive taxes.
-5. **Percentage Upper Bound:** Respects database `CHECK ("value" <= 100)` for percentage discounts.
+#### Corrected Historical Activity Evaluation:
+1. **Historical Activity Coverage:** Does **not** filter by current `isActive: true` on the rule row. A rule that is deactivated today remains eligible for historical billing if its `DiscountRuleActivity` interval proves it was active throughout `[periodStart, periodEnd)`.
+2. **Exclusion Rules:**
+   - A rule that became active *after* `periodStart` is excluded (`effectiveFrom > periodStart`).
+   - A rule that was deactivated *before* `periodEnd` is excluded (`effectiveUntil < periodEnd`).
+   - Rules with activity intervals that cover only part of the billing period are excluded.
+   - If no activity log exists, falls back to `rule.isActive === true`.
+3. **Finite Usage Locking:** If `usageLimit !== null`, acquires row lock `SELECT "id" FROM "discount_rules" WHERE "id" = $1 FOR UPDATE` within the transaction and verifies `redemptionCount < rule.usageLimit`.
+4. **Single Discount Rule (No Stacking in v1):** Selects the single rule providing the greatest monetary saving; tie-breaks deterministically using `rule.id.toLowerCase()`.
+5. **Pre-Tax Deduction:** Deducts discount from line subtotal before applying exclusive additive taxes.
 
 ---
 
-### C. Payment Allocation & Idempotency (`applyInvoicePayment`)
-**Module:** [`backend/src/modules/billing/payment-persistence.ts`](../backend/src/modules/billing/payment-persistence.ts)
+### C. Calendar Recurrence Date Arithmetic (`computeNextPeriod`)
+**Module:** [`backend/src/modules/billing/recurrence.ts`](../backend/src/modules/billing/recurrence.ts)
 
-Records payments against confirmed invoices with optimistic concurrency and idempotent replay.
+Computes continuous, gapless billing periods respecting calendar month-ends, leap years, and anchor days.
 
 ```typescript
-export async function applyInvoicePayment(
-  prismaOrTx: PrismaClient | Prisma.TransactionClient,
-  params: ApplyPaymentParams
-): Promise<ApplyPaymentResult>
+export function computeNextPeriod(params: ComputePeriodParams): ComputedPeriod
 ```
 
-#### Parameters (`ApplyPaymentParams`):
-| Field | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `invoiceId` | `string` (UUID) | Yes | Target invoice ID |
-| `recordedById` | `string \| null` | No | ID of user recording the payment |
-| `idempotencyKey` | `string` (UUID) | Yes | Unique idempotency key |
-| `method` | `string` | Yes | Payment method (`bank_transfer`, `card`, etc.) |
-| `amount` | `string \| number \| Decimal` | Yes | Payment amount (positive) |
-| `paymentDate` | `Date \| string` | Yes | Date of payment (cannot be in the future) |
-| `note` | `string \| null` | No | Optional payment note |
-| `expectedVersion` | `number` | No | Expected optimistic version of the invoice |
-| `scope` | `string` | No | Idempotency scope (default: `invoice:{id}:payment`) |
-| `requestPayload` | `unknown` | No | Raw request payload used for hash validation |
-
-#### Return Value (`ApplyPaymentResult`):
-- `payment`: Persisted `Payment` record.
-- `invoice`: Updated `Invoice` record (with updated `amountPaid`, `status`, and `version`).
-- `isReplay`: `boolean` — `true` if replaying a previous identical submission.
-
-#### Error Types (`PaymentPersistenceError`):
-- `422 VALIDATION_ERROR`: Non-positive amount or future payment date.
-- `404 NOT_FOUND`: Invoice ID not found.
-- `409 INVALID_TRANSITION`: Invoice is not in `CONFIRMED` status (e.g. `PAID`, `CANCELLED`, `DRAFT`).
-- `409 PAYMENT_EXCEEDS_BALANCE`: Payment amount exceeds `invoice.total - invoice.amountPaid`.
-- `409 IDEMPOTENCY_CONFLICT`: The key was used previously with different request contents.
-- `412 VERSION_CONFLICT`: `invoice.version !== expectedVersion` (when `expectedVersion` is provided).
-
-#### Idempotency Replay Invariant:
-A retry with an identical key and matching payload returns the original stored result **even after the invoice version or status has subsequently changed** (e.g. subsequent payments arrived or invoice marked PAID).
+#### Behavior & Guarantees:
+1. **Anchor Day Preservation:** A subscription starting on the 31st (e.g. `2026-01-31`) generates:
+   - Period 1: `[2026-01-31, 2026-02-28)` (Feb clamped to 28 days in common year)
+   - Period 2: `[2026-02-28, 2026-03-31)` (March restored to 31 days!)
+   - Period 3: `[2026-03-31, 2026-04-30)` (April clamped to 30 days)
+   - Period 4: `[2026-04-30, 2026-05-31)` (May restored to 31 days)
+2. **Leap Year Handling:** In leap years (e.g. 2028), Jan 31 clamps to Feb 29 (`2028-02-29`). For leap-day annual renewals (`2024-02-29`), non-leap years clamp to Feb 28 (`2025-02-28`), while leap years restore to Feb 29 (`2028-02-29`).
+3. **Exclusive Period-End Convention:** Period end is strictly exclusive; `periodEnd` of period $k$ serves as the exact `periodStart` for period $k+1$.
 
 ---
 
@@ -136,73 +100,78 @@ export async function initializeBillingRun(
 
 export async function executeBillingRun(
   prisma: PrismaClient,
-  runId: string
+  runId: string,
+  options?: ExecuteBillingRunOptions
 ): Promise<BillingRunResult>
 ```
 
-#### Guarantees:
-1. **Crash Recovery:** Job parameters (`periodLimit`, `subscriptionIdFilter`, `asOfDate`) are persisted before execution begins in state `PENDING`. If a worker dies, `executeBillingRun(prisma, runId)` resumes progress without duplicating invoices.
-2. **Durable Counters:** Tracks `subscriptionsProcessed`, `invoicesGenerated`, `invoicesReused`, `invoicesFailed`, `hasMore`, and `nextRunRequired`.
-3. **Advisory Locks:** Each subscription is locked during billing via `pg_try_advisory_xact_lock(hashtextextended('sub_run:' || subId, 0))` to prevent concurrent billing runs from overlapping.
-4. **Historical Pause Intervals:** Skips unbilled periods overlapping `SubscriptionPauseInterval` and advances `nextBillingDate` without shifting the recurrence anchor.
+#### Concurrency & Recovery Guarantees:
+1. **Run-Level Claiming:** Atomically acquires `pg_try_advisory_xact_lock(hashtextextended('billing_run:' || runId, 0))` and transitions `status: 'PENDING' -> 'IN_PROGRESS'`. Rejects concurrent execution with `BillingRunConcurrencyError(409, 'RUN_IN_PROGRESS')`.
+2. **Transactional Subscription Processing:** Each due subscription is processed within its own interactive database transaction:
+   - Acquires `pg_try_advisory_xact_lock(hashtextextended('sub_run:' || sub.id || ':' || periodStartStr, 0))`.
+   - Creates invoice via `createSubscriptionInvoice(tx, ...)`.
+   - Advances `subscription.nextBillingDate = periodEnd`.
+   - Incrementally and durably updates `BillingRun` counters (`subscriptionsProcessed`, `invoicesGenerated`, `invoicesReused`, `totalAmountBilled`) **within that exact same transaction**.
+3. **Crash Recovery Without Double-Counting:**
+   - If a crash occurs at subscription $N$, subscriptions $1 \dots N-1$ have their invoices, schedule advancements, and billing-run progress committed together.
+   - Subscription $N$ rolls back cleanly.
+   - Resuming the run via `executeBillingRun(prisma, runId, { allowResume: true })` queries due subscriptions whose `nextBillingDate <= asOfDate`. Subscriptions $1 \dots N-1$ are already advanced and skipped; subscription $N$ resumes cleanly.
+4. **Remaining Due & Pagination:** `hasMore` is evaluated directly by counting remaining subscriptions in PostgreSQL matching `nextBillingDate <= asOfDate` after the batch, eliminating counter-subtraction errors.
 
 ---
 
-## 3. How Vishnu Should Invoke Each Operation
+## 3. Payment Persistence Reconciliation
 
-### In Express Payment Route (`POST /api/v1/invoices/:id/payments`):
-Vishnu's existing handler in `backend/src/modules/billing/payments.ts` already satisfies the HTTP contracts. For shared background worker or batch reconciliations, invoke `applyInvoicePayment`:
+### Comparison of Implementations:
+1. **V1 Route Handler (`backend/src/modules/billing/payments.ts`):**
+   - Owned by Vishnu as part of the authenticated Express V1 prototype.
+   - Handles HTTP-specific validation (`If-Match` parsing, UUID checks, `Retry-After: 1`, `428 Precondition Required`).
+   - Formats and stores the full HTTP response envelope `{ data: { payment: paymentView(payment), invoice: invoiceSummary(...) } }` in `IdempotencyRecord.responseBody`.
+   - Replays return the full HTTP payload directly to the client.
+2. **Persistence Helper (`backend/src/modules/billing/payment-persistence.ts`):**
+   - Owned by Zenfox as a programmatic persistence service.
+   - Accepts generic parameters, enforces row locks (`updateMany({ version: increment: 0 })`), checks optimistic versions, checks overpayments, and returns `{ payment, invoice, isReplay }`.
 
-```typescript
-import { applyInvoicePayment } from '../billing/payment-persistence.js';
-
-const result = await applyInvoicePayment(prisma, {
-  invoiceId: req.params.id,
-  recordedById: user.id,
-  idempotencyKey: req.get('Idempotency-Key')!,
-  expectedVersion: parseIfMatch(req.get('If-Match')),
-  amount: req.body.amount,
-  method: req.body.method,
-  paymentDate: req.body.payment_date,
-  note: req.body.note,
-  requestPayload: { body: req.body, version: req.get('If-Match') },
-});
-```
-
-### In Recurring Billing Worker / Route (`POST /api/v1/billing-runs`):
-
-```typescript
-import { initializeBillingRun, executeBillingRun } from '../billing/billing-run-persistence.js';
-
-// 1. In HTTP controller: create job and return 202 Accepted
-const run = await initializeBillingRun(prisma, {
-  asOfDate: req.body.as_of_date,
-  periodLimit: req.body.period_limit,
-  subscriptionIdFilter: req.body.subscription_id,
-  initiatedById: user.id,
-});
-
-// 2. In background worker: execute and track progress
-const summary = await executeBillingRun(prisma, run.id);
-```
-
-### In Manual / Scheduled Invoice Generation:
-
-```typescript
-import { createSubscriptionInvoice } from '../billing/invoice-persistence.js';
-
-const { invoice, isReused, isSkippedPaused } = await createSubscriptionInvoice(prisma, {
-  subscriptionId: '...',
-  periodStart: new Date('2026-11-01'),
-  periodEnd: new Date('2026-12-01'),
-  advanceSchedule: true,
-});
-```
+### Canonical Integration Recommendation for Vishnu:
+To maintain single-source-of-truth persistence without altering the approved HTTP V1 contract:
+1. Keep `backend/src/modules/billing/payments.ts` as the Express HTTP controller.
+2. When ready to eliminate internal duplication, `recordPayment()` in `payments.ts` can delegate its database mutations to `applyInvoicePayment()` by providing a custom response builder:
+   ```typescript
+   const { payment, invoice, isReplay } = await applyInvoicePayment(tx, {
+     invoiceId,
+     recordedById: user.id,
+     idempotencyKey: key,
+     expectedVersion: parseInt(version.replace(/"/g, ''), 10),
+     amount: req.body.amount,
+     method: req.body.method,
+     paymentDate: req.body.payment_date,
+     note: req.body.note,
+     scope,
+     requestPayload: { body: req.body, version },
+   });
+   ```
+3. In Milestone V1, `payments.ts` is already fully tested and compliant with the OpenAPI contract. No breaking changes have been introduced.
 
 ---
 
-## 4. Remaining Integration Work
+## 4. PR Scope & Merge Coordination
 
-1. **Email Outbox Dispatcher:** Invoices are persisted with status `CONFIRMED`. When background email dispatch is implemented, consume `invoice_email_outbox` outside transaction boundaries.
-2. **Reporting Queries (D4):** Overview report queries in `prototype.ts` are functional. Future performance optimizations (materialized views, aggregated date range queries) will be addressed in D4.
-3. **Cancellation Semantics:** Subscriptions and invoices support terminal `CANCELLED` status; schedule rewinds and discount restorations remain prohibited per confirmed MVP policy.
+### Open Pull Requests:
+- **PR #7 (`feat/prototype-v1` -> `main`):** Contains Vishnu's authenticated prototype V1 (commit `ebbf0fe`).
+- **PR #9 (`feat/db-persistence` -> `main`):** Contains the D3 transactional database persistence implementation, built on top of `feat/prototype-v1`.
+
+### Recommended Merge Sequence:
+1. **Step 1:** Vishnu reviews and merges **PR #7** (`feat/prototype-v1` into `main`).
+2. **Step 2:** Once PR #7 is merged, GitHub will automatically update PR #9's base diff against `main`, leaving only the database persistence additions (`backend/src/modules/billing/`, recurrence, tests, and documentation).
+3. **Step 3:** Vishnu reviews and merges **PR #9** (`feat/db-persistence` into `main`).
+
+---
+
+## 5. Summary of Verification Checks
+
+- **Prisma Schema Validation:** `prisma validate` passed.
+- **Client Generation:** `prisma generate` (7.10.1) passed.
+- **TypeScript Compilation:** `npm run typecheck` passed with 0 errors.
+- **Backend Check Suite:** `npm run check` passed 15/15 unit and integration tests.
+- **Static Schema & DDL Integrity:** `python scripts/verify_schema_integrity.py` passed (32 models, 13 checks, 6 indexes).
+- **PostgreSQL 16 Integration Suite:** All 34 tests in `test_db_constraints.ts` pass against live PostgreSQL 16 Alpine in CI.
