@@ -1,0 +1,23 @@
+{
+  "name": "odoo-hackathon-subscription-management-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Brightloop Software Subscription Management System",
+  "scripts": {
+    "db:validate": "python scripts/verify_schema_integrity.py",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "node prisma/seed.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prisma": "^5.22.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}

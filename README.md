@@ -2,13 +2,51 @@
 
 Build a unified platform for Brightloop Software to manage products, recurring plans, quotations, subscriptions, invoices, discounts, payments, and reporting.
 
-## Current status
+## Technology stack
 
-Planning only: this repository contains documentation, with no application scaffold, dependencies, migrations, or runnable tests yet. Installation and start commands will be added after scaffolding.
+The confirmed technology stack is:
+- **Frontend:** React + Vite + TypeScript
+- **Backend:** Node.js + Express + TypeScript
+- **Database:** PostgreSQL
+- **ORM & Migrations:** Prisma ORM + Prisma Migrate
+- **Contracts:** OpenAPI 3.1 REST JSON (`docs/api/openapi.json`)
 
-The original documentation proposed an Odoo-based implementation. The supplied problem statement does not explicitly mandate that framework.
+## Database setup and migrations
 
-The subsequent UI, schema and API handoffs use **React + TypeScript, Express + TypeScript and PostgreSQL** as the working implementation baseline. Runtime versions, ORM and deployment target remain open. The [API contracts](docs/api-contracts.md) now define shared request/response formats and proposed MVP policies; they supersede older open questions where explicitly resolved.
+Prerequisites: Node.js (v18+), npm, and a running PostgreSQL instance.
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Configure environment:**
+   Copy `.env.example` to `.env` and set your PostgreSQL connection string:
+   ```bash
+   cp .env.example .env
+   # Edit DATABASE_URL in .env
+   ```
+
+3. **Validate schema & generate client:**
+   ```bash
+   npx prisma validate
+   npx prisma generate
+   ```
+
+4. **Apply migrations:**
+   ```bash
+   npx prisma migrate dev
+   ```
+
+5. **Seed baseline demo data:**
+   ```bash
+   npm run prisma:seed
+   ```
+
+6. **Verify schema & constraint integrity:**
+   ```bash
+   python scripts/verify_schema_integrity.py
+   ```
 
 ## Team responsibilities
 
@@ -20,7 +58,7 @@ The subsequent UI, schema and API handoffs use **React + TypeScript, Express + T
 
 See [team responsibilities](docs/team-responsibilities.md) for work packages and handoffs.
 
-Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md), including relationships, constraints and unresolved billing policies.
+Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md) and [API impact guide](docs/api-impact.md), including relationships, constraints and unresolved billing policies.
 
 Frontend implementation starts with the [UI wireframe and handoff](docs/ui-wireframe.md). Open `docs/wireframes/index.html` locally to explore the admin, staff and customer screens with sample data.
 
@@ -36,10 +74,10 @@ Subscriptions follow **Draft -> Quotation -> Confirmed -> Active -> Closed**. Pa
 
 1. Read [requirements](docs/requirements.md) for statement-derived scope and acceptance checks.
 2. Read [team responsibilities](docs/team-responsibilities.md) for your work package.
-3. Settle unresolved choices in [architecture and contracts](docs/architecture.md) before building incompatible implementations.
+3. Settle unresolved choices in [architecture and contracts](docs/architecture.md) and [API impact](docs/api-impact.md) before building incompatible implementations.
 4. Follow [the roadmap](plan.md) and [contribution workflow](contributing.md).
 
-After scaffolding, add verified prerequisites, environment variable names, database setup/seed commands, start commands and test commands here. Never commit credentials or real customer data.
+Never commit credentials or real customer data.
 
 ## Documentation index
 
