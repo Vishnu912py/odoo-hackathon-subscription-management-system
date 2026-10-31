@@ -20,7 +20,10 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test:db": "tsx scripts/test_db_constraints.ts",
+    "test:verify": "python scripts/verify_schema_integrity.py"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
@@ -41,5 +44,8 @@
     "supertest": "7.3.1",
     "tsx": "4.23.15",
     "typescript": "5.9.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

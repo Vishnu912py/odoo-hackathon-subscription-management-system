@@ -5,9 +5,24 @@
  * Run in CI with DATABASE_URL pointing to an isolated PostgreSQL instance.
  */
 
-import { PrismaClient, UserRole, DiscountType, DiscountScope, BillingInterval } from '@prisma/client';
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
+import {
+  PrismaClient,
+  UserRole,
+  DiscountType,
+  DiscountScope,
+  BillingInterval,
+} from '../src/generated/prisma/client.js';
 
-const prisma = new PrismaClient();
+const connectionString =
+  process.env.DIRECT_URL ||
+  process.env.DATABASE_URL ||
+  'postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public';
+
+const schema = new URL(connectionString).searchParams.get('schema') ?? 'public';
+const adapter = new PrismaPg({ connectionString }, { schema });
+const prisma = new PrismaClient({ adapter });
 
 let testsPassed = 0;
 let testsFailed = 0;

@@ -11,7 +11,7 @@ on:
 
 jobs:
   database-test:
-    name: PostgreSQL 16 Migrations & Constraint Integration
+    name: PostgreSQL 16 Migrations & Constraint Integration (Prisma 7)
     runs-on: ubuntu-latest
 
     services:
@@ -31,37 +31,40 @@ jobs:
 
     env:
       DATABASE_URL: "postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public"
+      DIRECT_URL: "postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public"
       NODE_ENV: test
+
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
 
-      - name: Setup Python
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: npm ci
 
-      - name: Validate Prisma Schema
-        run: npx prisma validate --schema=database/prisma/schema.prisma
-
-      - name: Generate Prisma Client
-        run: npx prisma generate --schema=database/prisma/schema.prisma
+      - name: Run Backend Comprehensive Check Suite
+        run: npm run check
 
       - name: Run Static Schema & DDL Integrity Verifier
-        run: python database/scripts/verify_schema_integrity.py
+        run: python scripts/verify_schema_integrity.py
 
-      - name: Apply Migrations (Deploy to Clean PostgreSQL)
-        run: npx prisma migrate deploy --schema=database/prisma/schema.prisma
+      - name: Apply Migrations (Deploy to Clean PostgreSQL 16)
+        run: npm run db:deploy
 
       - name: Seed Database (Run 1)
         run: npm run prisma:seed

@@ -1,6 +1,23 @@
-import { PrismaClient, UserRole, BillingInterval, DiscountType, DiscountScope, SubscriptionStatus, InvoiceStatus } from '@prisma/client';
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
+import {
+  PrismaClient,
+  UserRole,
+  BillingInterval,
+  DiscountType,
+  DiscountScope,
+  SubscriptionStatus,
+  InvoiceStatus,
+} from '../src/generated/prisma/client.js';
 
-const prisma = new PrismaClient();
+const connectionString =
+  process.env.DIRECT_URL ||
+  process.env.DATABASE_URL ||
+  'postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public';
+
+const schema = new URL(connectionString).searchParams.get('schema') ?? 'public';
+const adapter = new PrismaPg({ connectionString }, { schema });
+const prisma = new PrismaClient({ adapter });
 
 // Deterministic synthetic fixture IDs aligned with docs/api-contracts.md and docs/api/examples/
 export const FIXTURES = {
