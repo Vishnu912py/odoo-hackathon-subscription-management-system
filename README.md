@@ -2,9 +2,15 @@
 
 Build a unified platform for Brightloop Software to manage products, recurring plans, quotations, subscriptions, invoices, discounts, payments, and reporting.
 
-## Implementation checklist — 31 October 2026
+## Prototype v1
 
-Checked items are implemented deliverables, not proof that the full business journey works. PR #6 (backend foundation) and PR #4 (database foundation) are merged in `main` at `998c6a8`. Business/authentication endpoints still return `501 NOT_IMPLEMENTED`.
+The `feat/prototype-v1` branch combines Albin's frontend, Zenfox's Prisma 7 database foundation, and working handlers for registration, login/logout, owned subscription/invoice/payment reads, reports and staff payment recording. See [prototype setup and demo](docs/prototype-v1.md).
+
+Catalog editing, subscription lifecycle actions, recurring billing, discounts, reset email, staff invitations and invoice delivery/printing remain follow-ups. This is an integrated first prototype, not completion of R01–R12.
+
+## Foundation checklist — 31 October 2026
+
+Checked items below record the earlier foundation deliverables. PR #6 and PR #4 are merged in `main` at `998c6a8`. The prototype branch now implements 14 operations; the other contract endpoints still return `501 NOT_IMPLEMENTED`. Its newer scope and validation are recorded in the prototype guide above.
 
 ### Vishnu (`Vishnu912py`) — backend and integration
 
@@ -17,7 +23,7 @@ Checked items are implemented deliverables, not proof that the full business jou
 - [ ] V4: implement billing orchestration, tax/discount calculations, invoice actions and payment rules.
 - [ ] V5: expose reports, complete the real end-to-end journey, validate performance and prepare release/demo.
 
-Local frontend integration code also exists in the working tree: API client/types, development proxy, connection indicators, sign-in wiring and read-only report/list views. It is **uncommitted** and is not counted as merged or verified end-to-end functionality.
+Frontend integration, registration/sign-in, invoice details and payment entry are included in the prototype branch. PostgreSQL-backed HTTP integration tests exercise the workflow; browser visual verification remains blocked by the browser permission gate.
 
 ### Zenfox (`Zenfox-690`) — database and persistence
 

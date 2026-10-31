@@ -7,10 +7,12 @@ import type { Database } from './db/client.js';
 import { errorHandler, HttpError, notFound } from './http/errors.js';
 import { requestContext, requestLogger, type RequestLog } from './http/request-context.js';
 import { createApiRouter } from './modules/index.js';
+import { prototypeRouter } from './modules/prototype.js';
 
 export interface AppDependencies {
   database: Database;
   logRequest?: (entry: RequestLog) => void;
+  now?: () => Date;
 }
 
 export function createApp(config: Config, dependencies: AppDependencies) {
@@ -53,7 +55,7 @@ export function createApp(config: Config, dependencies: AppDependencies) {
       return;
     }
     next();
-  }, createApiRouter(contract));
+  }, prototypeRouter(dependencies.database.prisma, config, dependencies.now), createApiRouter(contract));
   app.use(notFound);
   app.use(errorHandler);
   return app;

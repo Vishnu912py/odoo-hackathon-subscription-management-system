@@ -2,7 +2,7 @@
 
 Confirmed by Vishnu: `Zenfox-690` specializes in databases; `albinsavi123-lang` specializes in frontend. This document defines the team's assignments; GitHub issue assignments and collaborator notifications are managed separately.
 
-Status reviewed on 31 October 2026 against merged main (998c6a8). Checked work packages are delivered; unchecked packages may contain completed subtasks. See the [README checklist](../README.md) for evidence and separate uncommitted frontend integration work.
+Status reviewed on 31 October 2026 against merged main (998c6a8). Checked work packages are delivered; unchecked packages may contain completed subtasks. See the [README checklist](../README.md) for evidence and the newer prototype scope in [prototype v1](prototype-v1.md).
 
 ## Vishnu912py - team lead and backend
 
@@ -41,6 +41,8 @@ Completed frontend subtasks: React/Vite/TypeScript scaffold and dashboard/naviga
 Done when all three roles complete permitted workflows against the real backend, errors are clear and the portal cannot reveal another customer's records. Use React/TypeScript and the shared API contract. Prototype with agreed fixtures until backend operations exist; the current server foundation's business routes return explicit 501 responses.
 
 ## Handoffs and review
+
+Prototype v1 now integrates the database foundation with auth, owned reads, reports and payment recording. Full V2–V5 and D3–D5 completion is still pending; see [the prototype guide](prototype-v1.md) for exactly what works and what remains.
 
 | Deliverable | Owner | Consumer/reviewer | Agreement needed |
 | --- | --- | --- | --- |

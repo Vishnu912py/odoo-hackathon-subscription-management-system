@@ -4,7 +4,7 @@ Implementation owner: **Vishnu912py**. Frontend consumer: **albinsavi123-lang**.
 
 This is the shared implementation baseline for React + TypeScript, Express + TypeScript and PostgreSQL. **No API server or database migrations are implemented by these files.** API shapes below are the target for initial development. Business policies marked as proposed defaults are engineering decisions made for this handoff, not additional requirements from the problem statement or claims of prior team approval.
 
-Implementation status: the newer [backend foundation](../backend/README.md) provides health checks and shared HTTP infrastructure. Business operations still return `501 NOT_IMPLEMENTED`, not the success examples below. Foundation transport errors also use `413 PAYLOAD_TOO_LARGE` and `415 UNSUPPORTED_MEDIA_TYPE` with the same error envelope. Prisma ORM/Migrate is confirmed; schema and migrations are located in `backend/prisma`.
+Implementation status: [prototype v1](prototype-v1.md) implements 14 auth/read/report/payment operations using the existing contracts. Other operations return `501 NOT_IMPLEMENTED`. Infrastructure errors also use `413 PAYLOAD_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, and `503 DATABASE_UNAVAILABLE` when no database is configured, with the same error envelope. Prisma ORM/Migrate is confirmed; schema and migrations are located in `backend/prisma`.
 
 ## Source of truth and files
 

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { hashPassword } from '../src/modules/accounts/passwords.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   PrismaClient,
@@ -48,7 +49,7 @@ export const FIXTURES = {
 };
 
 async function main() {
-  if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEV_SEED) {
+  if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DEV_SEED !== 'true') {
     console.error('ERROR: Development seed cannot be executed in production environment!');
     process.exit(1);
   }
@@ -56,16 +57,14 @@ async function main() {
   console.log('Seeding Subscription Management System baseline database with idempotent fixtures...');
 
   // 1. Users (Admin, Staff, Customer)
-  const defaultPasswordHash = '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQmG6W56SuT86p2oA6nxe';
+  const legacyPlaceholder = '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQmG6W56SuT86p2oA6nxe';
+  const demoPassword = process.env.DEMO_PASSWORD || 'BrightloopDemo!2026';
+  if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{9,128}$/.test(demoPassword)) throw new Error('DEMO_PASSWORD must satisfy the account password policy.');
+  const defaultPasswordHash = await hashPassword(demoPassword);
 
   const adminUser = await prisma.user.upsert({
     where: { id: FIXTURES.ADMIN_USER_ID },
-    update: {
-      email: 'admin@brightloop.io',
-      role: UserRole.ADMIN,
-      displayName: 'System Administrator',
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.ADMIN_USER_ID,
       email: 'admin@brightloop.io',
@@ -78,12 +77,7 @@ async function main() {
 
   const staffUser = await prisma.user.upsert({
     where: { id: FIXTURES.STAFF_USER_ID },
-    update: {
-      email: 'staff@brightloop.io',
-      role: UserRole.STAFF,
-      displayName: 'Billing Operations Staff',
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.STAFF_USER_ID,
       email: 'staff@brightloop.io',
@@ -96,12 +90,7 @@ async function main() {
 
   const customerUser = await prisma.user.upsert({
     where: { id: FIXTURES.CUSTOMER_USER_ID },
-    update: {
-      email: 'billing@acmestudio.com',
-      role: UserRole.CUSTOMER,
-      displayName: 'Acme Studio Accounts',
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.CUSTOMER_USER_ID,
       email: 'billing@acmestudio.com',
@@ -112,16 +101,15 @@ async function main() {
     },
   });
 
+  // Upgrade only the original known synthetic placeholder; never reset real passwords.
+  for (const demo of [adminUser, staffUser, customerUser]) {
+    await prisma.user.updateMany({ where: { id: demo.id, passwordHash: legacyPlaceholder }, data: { passwordHash: defaultPasswordHash } });
+  }
+
   // 2. Customer Profile (Acme Studio)
   const customer = await prisma.customer.upsert({
     where: { id: FIXTURES.CUSTOMER_PROFILE_ID },
-    update: {
-      userId: customerUser.id,
-      name: 'Acme Studio Pvt Ltd',
-      companyName: 'Acme Studio',
-      billingEmail: 'billing@acmestudio.com',
-      billingAddress: '101 Tech Park, Indiranagar, Bangalore, KA 560038',
-    },
+    update: {},
     create: {
       id: FIXTURES.CUSTOMER_PROFILE_ID,
       userId: customerUser.id,
@@ -135,11 +123,7 @@ async function main() {
   // 3. Taxes
   const taxGst18 = await prisma.tax.upsert({
     where: { id: FIXTURES.TAX_GST18_ID },
-    update: {
-      name: 'GST 18%',
-      ratePercent: 18.0000,
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.TAX_GST18_ID,
       name: 'GST 18%',
@@ -151,14 +135,7 @@ async function main() {
   // 4. Products & Variants (incorporating R03: variant with +560 adjustment)
   const productCore = await prisma.product.upsert({
     where: { id: FIXTURES.PRODUCT_CORE_ID },
-    update: {
-      name: 'Brightloop Cloud ERP Standard',
-      productType: 'SERVICE',
-      salesPrice: 500.0000,
-      costPrice: 200.0000,
-      notes: 'Standard cloud instance recurring user seat',
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.PRODUCT_CORE_ID,
       name: 'Brightloop Cloud ERP Standard',
@@ -172,14 +149,7 @@ async function main() {
 
   const productConnector = await prisma.product.upsert({
     where: { id: FIXTURES.PRODUCT_CONNECTOR_ID },
-    update: {
-      name: 'Odoo Connector Addon',
-      productType: 'SERVICE',
-      salesPrice: 0.0000,
-      costPrice: 150.0000,
-      notes: 'Connector addon module for external ERP sync',
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.PRODUCT_CONNECTOR_ID,
       name: 'Odoo Connector Addon',
@@ -193,13 +163,7 @@ async function main() {
 
   const variantOdoo = await prisma.productVariant.upsert({
     where: { id: FIXTURES.VARIANT_ODOO_ID },
-    update: {
-      productId: productConnector.id,
-      name: 'Odoo Enterprise Edition Connector',
-      attributes: { brand: 'Odoo', edition: 'Enterprise' },
-      priceAdjustment: 560.0000, // Explicit requirement R03
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.VARIANT_ODOO_ID,
       productId: productConnector.id,
@@ -226,11 +190,7 @@ async function main() {
   // 5. Payment Terms
   const paymentTermNet15 = await prisma.paymentTerm.upsert({
     where: { id: FIXTURES.PAYMENT_TERM_NET15_ID },
-    update: {
-      name: 'Net 15 Days',
-      dueDays: 15,
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.PAYMENT_TERM_NET15_ID,
       name: 'Net 15 Days',
@@ -241,11 +201,7 @@ async function main() {
 
   const paymentTermImmediate = await prisma.paymentTerm.upsert({
     where: { id: FIXTURES.PAYMENT_TERM_IMMEDIATE_ID },
-    update: {
-      name: 'Due on Receipt (Net 0)',
-      dueDays: 0,
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.PAYMENT_TERM_IMMEDIATE_ID,
       name: 'Due on Receipt (Net 0)',
@@ -257,19 +213,7 @@ async function main() {
   // 6. Plans & Bundle Pricing (Confirming rule: plans.price == sum(default included lines))
   const monthlyPlan = await prisma.plan.upsert({
     where: { id: FIXTURES.PLAN_MONTHLY_ID },
-    update: {
-      name: 'Professional Cloud ERP Monthly',
-      price: 1000.00,
-      currency: 'INR',
-      billingInterval: BillingInterval.MONTHLY,
-      minimumQuantity: 1.0000,
-      availableFrom: new Date('2026-01-01'),
-      autoClose: false,
-      allowEarlyClose: true,
-      allowPause: true,
-      allowRenewal: true,
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.PLAN_MONTHLY_ID,
       name: 'Professional Cloud ERP Monthly',
@@ -288,11 +232,7 @@ async function main() {
 
   await prisma.planProduct.upsert({
     where: { planId_productId: { planId: monthlyPlan.id, productId: productCore.id } },
-    update: {
-      defaultQuantity: 2.0000,
-      isAddon: false,
-      unitPriceOverride: 500.0000,
-    },
+    update: {},
     create: {
       id: FIXTURES.PLAN_PRODUCT_CORE_ID,
       planId: monthlyPlan.id,
@@ -305,11 +245,7 @@ async function main() {
 
   await prisma.planProduct.upsert({
     where: { planId_productId: { planId: monthlyPlan.id, productId: productConnector.id } },
-    update: {
-      defaultQuantity: 1.0000,
-      isAddon: true,
-      unitPriceOverride: 0.0000,
-    },
+    update: {},
     create: {
       id: FIXTURES.PLAN_PRODUCT_CONNECTOR_ID,
       planId: monthlyPlan.id,
@@ -323,12 +259,7 @@ async function main() {
   // 7. Quotation Template
   const quoteTemplate = await prisma.quotationTemplate.upsert({
     where: { id: FIXTURES.TEMPLATE_ID },
-    update: {
-      planId: monthlyPlan.id,
-      name: 'Standard ERP Package Template',
-      validityDays: 15,
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.TEMPLATE_ID,
       planId: monthlyPlan.id,
@@ -340,12 +271,7 @@ async function main() {
 
   await prisma.quotationTemplateLine.upsert({
     where: { id: FIXTURES.TEMPLATE_LINE_CORE_ID },
-    update: {
-      templateId: quoteTemplate.id,
-      productId: productCore.id,
-      quantity: 2.0000,
-      unitPrice: 500.0000,
-    },
+    update: {},
     create: {
       id: FIXTURES.TEMPLATE_LINE_CORE_ID,
       templateId: quoteTemplate.id,
@@ -357,13 +283,7 @@ async function main() {
 
   await prisma.quotationTemplateLine.upsert({
     where: { id: FIXTURES.TEMPLATE_LINE_CONNECTOR_ID },
-    update: {
-      templateId: quoteTemplate.id,
-      productId: productConnector.id,
-      variantId: variantOdoo.id,
-      quantity: 1.0000,
-      unitPrice: 560.0000,
-    },
+    update: {},
     create: {
       id: FIXTURES.TEMPLATE_LINE_CONNECTOR_ID,
       templateId: quoteTemplate.id,
@@ -377,16 +297,7 @@ async function main() {
   // 8. Discount Rules
   const fixedDiscount = await prisma.discountRule.upsert({
     where: { id: FIXTURES.DISCOUNT_FIXED_ID },
-    update: {
-      name: 'Early Adopter ₹200 Off',
-      discountType: DiscountType.FIXED,
-      value: 200.0000,
-      currency: 'INR',
-      scope: DiscountScope.SUBSCRIPTION,
-      minimumPurchase: 1000.00,
-      usageLimit: 50,
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.DISCOUNT_FIXED_ID,
       name: 'Early Adopter ₹200 Off',
@@ -402,14 +313,7 @@ async function main() {
 
   const percentageDiscount = await prisma.discountRule.upsert({
     where: { id: FIXTURES.DISCOUNT_PERCENT_ID },
-    update: {
-      name: 'Connector 10% Discount',
-      discountType: DiscountType.PERCENTAGE,
-      value: 10.0000,
-      scope: DiscountScope.PRODUCT,
-      usageLimit: 100,
-      isActive: true,
-    },
+    update: {},
     create: {
       id: FIXTURES.DISCOUNT_PERCENT_ID,
       name: 'Connector 10% Discount',
@@ -430,18 +334,7 @@ async function main() {
   // 9. Integration Subscription & Invoice Fixtures (matching docs/api/examples/invoice-partial.json)
   const subscription = await prisma.subscription.upsert({
     where: { id: FIXTURES.SUBSCRIPTION_ID },
-    update: {
-      number: 'SUB-0001',
-      customerId: customer.id,
-      planId: monthlyPlan.id,
-      paymentTermId: paymentTermNet15.id,
-      status: SubscriptionStatus.ACTIVE,
-      currency: 'INR',
-      billingInterval: BillingInterval.MONTHLY,
-      startDate: new Date('2026-10-01'),
-      expiryDate: new Date('2027-10-01'),
-      nextBillingDate: new Date('2026-11-01'),
-    },
+    update: {},
     create: {
       id: FIXTURES.SUBSCRIPTION_ID,
       number: 'SUB-0001',
@@ -454,48 +347,37 @@ async function main() {
       startDate: new Date('2026-10-01'),
       expiryDate: new Date('2027-10-01'),
       nextBillingDate: new Date('2026-11-01'),
+      autoCloseSnapshot: false,
+      allowEarlyCloseSnapshot: true,
+      allowPauseSnapshot: true,
+      allowRenewalSnapshot: true,
+      dueDaysSnapshot: 15,
+      recurrenceAnchorDay: 1,
     },
   });
 
   const subLine = await prisma.subscriptionLine.upsert({
     where: { id: FIXTURES.SUBSCRIPTION_LINE_ID },
-    update: {
-      subscriptionId: subscription.id,
-      productId: productCore.id,
-      description: 'Brightloop Cloud ERP Standard',
-      quantity: 2.0000,
-      unitPrice: 500.0000,
-    },
+    update: {},
     create: {
       id: FIXTURES.SUBSCRIPTION_LINE_ID,
       subscriptionId: subscription.id,
       productId: productCore.id,
       description: 'Brightloop Cloud ERP Standard',
+      effectiveFrom: new Date('2026-10-01'),
       quantity: 2.0000,
       unitPrice: 500.0000,
     },
   });
 
+  await prisma.subscriptionLineTax.upsert({
+    where: { subscriptionLineId_taxId: { subscriptionLineId: subLine.id, taxId: taxGst18.id } },
+    update: {}, create: { subscriptionLineId: subLine.id, taxId: taxGst18.id },
+  });
+
   const invoice = await prisma.invoice.upsert({
     where: { id: FIXTURES.INVOICE_ID },
-    update: {
-      number: 'INV-0001',
-      subscriptionId: subscription.id,
-      periodStart: new Date('2026-10-01'),
-      periodEnd: new Date('2026-11-01'),
-      issueDate: new Date('2026-10-01'),
-      dueDate: new Date('2026-10-16'),
-      status: InvoiceStatus.CONFIRMED,
-      currency: 'INR',
-      customerNameSnapshot: customer.name,
-      billingEmailSnapshot: customer.billingEmail,
-      billingAddressSnapshot: customer.billingAddress,
-      subtotal: 1000.00,
-      discountTotal: 0.00,
-      taxTotal: 180.00,
-      total: 1180.00,
-      amountPaid: 500.00,
-    },
+    update: {},
     create: {
       id: FIXTURES.INVOICE_ID,
       number: 'INV-0001',
@@ -519,17 +401,7 @@ async function main() {
 
   const invLine = await prisma.invoiceLine.upsert({
     where: { id: FIXTURES.INVOICE_LINE_ID },
-    update: {
-      invoiceId: invoice.id,
-      subscriptionLineId: subLine.id,
-      descriptionSnapshot: subLine.description,
-      quantity: 2.0000,
-      unitPrice: 500.0000,
-      subtotal: 1000.00,
-      discountAmount: 0.00,
-      taxAmount: 180.00,
-      total: 1180.00,
-    },
+    update: {},
     create: {
       id: FIXTURES.INVOICE_LINE_ID,
       invoiceId: invoice.id,
@@ -546,14 +418,7 @@ async function main() {
 
   await prisma.invoiceLineTax.upsert({
     where: { id: FIXTURES.INVOICE_LINE_TAX_ID },
-    update: {
-      invoiceLineId: invLine.id,
-      taxId: taxGst18.id,
-      nameSnapshot: taxGst18.name,
-      ratePercentSnapshot: taxGst18.ratePercent,
-      taxableBase: 1000.00,
-      amount: 180.00,
-    },
+    update: {},
     create: {
       id: FIXTURES.INVOICE_LINE_TAX_ID,
       invoiceLineId: invLine.id,
@@ -567,15 +432,7 @@ async function main() {
 
   await prisma.payment.upsert({
     where: { id: FIXTURES.PAYMENT_ID },
-    update: {
-      invoiceId: invoice.id,
-      recordedById: staffUser.id,
-      idempotencyKey: '00000000-0000-4000-8000-000000000700',
-      method: 'bank_transfer',
-      amount: 500.00,
-      paymentDate: new Date('2026-10-15'),
-      note: 'Initial partial payment',
-    },
+    update: {},
     create: {
       id: FIXTURES.PAYMENT_ID,
       invoiceId: invoice.id,
@@ -588,7 +445,7 @@ async function main() {
     },
   });
 
-  console.log('Seed completed successfully (100% idempotent run verified):');
+  console.log('Synthetic seed completed; existing rows preserved:');
   console.log(`- Admin: ${adminUser.email} [${adminUser.id}]`);
   console.log(`- Staff: ${staffUser.email} [${staffUser.id}]`);
   console.log(`- Customer: ${customer.name} [${customer.id}]`);
@@ -596,7 +453,7 @@ async function main() {
   console.log(`- Product Variant: ${variantOdoo.name} [${variantOdoo.id}] (+₹${variantOdoo.priceAdjustment})`);
   console.log(`- Plan: ${monthlyPlan.name} [${monthlyPlan.id}] (₹${monthlyPlan.price})`);
   console.log(`- Subscription: ${subscription.number} [${subscription.id}]`);
-  console.log(`- Invoice: ${invoice.number} [${invoice.id}] (Total: ₹${invoice.total}, Balance Due: ₹680.00)`);
+  console.log(`- Invoice: ${invoice.number} [${invoice.id}] (Total: ₹${invoice.total})`);
 }
 
 main()

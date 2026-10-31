@@ -11,7 +11,7 @@ const app = createApp(config, {
 });
 const server = app.listen(config.port, config.host, () => {
   console.info(`Brightloop backend listening at http://${config.host}:${config.port}`);
-  console.info('Foundation only: business API operations return 501 until implemented.');
+  console.info('Prototype v1: auth, owned records, reports and payment recording; other operations return 501.');
 });
 server.on('error', () => {
   console.error('HTTP server could not start. Check HOST/PORT and whether the port is already in use.');

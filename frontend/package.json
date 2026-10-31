@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "api:generate": "node scripts/generate-api-types.mjs",
+    "api:check": "node scripts/generate-api-types.mjs --check",
+    "test": "node --test test/*.test.mjs",
+    "check": "npm run api:check && npm test && npm run lint && npm run build"
   },
   "dependencies": {
     "react": "^19.3.1",

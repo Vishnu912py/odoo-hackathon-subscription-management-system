@@ -23,11 +23,14 @@
     "db:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
     "test:db": "tsx scripts/test_db_constraints.ts",
-    "test:verify": "python scripts/verify_schema_integrity.py"
+    "test:verify": "python scripts/verify_schema_integrity.py",
+    "test:integration": "tsx --test test/integration/*.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "cors": "2.8.6",
     "dotenv": "18.0.9",
     "express": "5.3.0",

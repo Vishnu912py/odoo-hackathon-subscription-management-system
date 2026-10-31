@@ -2,7 +2,7 @@
 
 ## Project context
 
-This hackathon project implements the Brightloop Software subscription management problem statement. It contains documentation, a static UI wireframe and a backend foundation in `backend/`. The baseline is React/TypeScript, Express/TypeScript, PostgreSQL and confirmed Prisma ORM/Migrate. Backend uses Node.js 24 and Prisma 7 with exact dependency versions in backend/package.json. Domain models and business API operations are not implemented; contract routes return 501. Odoo was an earlier proposal, not a mandated framework.
+This hackathon project implements the Brightloop Software subscription management problem statement. The baseline is React/TypeScript, Express/TypeScript, PostgreSQL and confirmed Prisma ORM/Migrate. Backend uses Node.js 24 and Prisma 7 with exact dependency versions in backend/package.json. Zenfox's schema/migrations are integrated. Prototype v1 implements auth, owned record reads, reports and transactional payment recording; remaining contract routes return 501. Read `docs/prototype-v1.md` for scope and tests. Odoo was an earlier proposal, not a mandated framework.
 
 Backend schema/migrations belong in `backend/prisma`; Zenfox owns domain modeling. Read `backend/README.md` before backend work. Use `npm run check` from backend for validation. Never substitute fixture responses for real persisted/authenticated results or claim health/readiness proves business-feature completion.
 

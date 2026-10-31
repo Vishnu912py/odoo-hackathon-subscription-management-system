@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feat/db-schema
+      - feat/prototype-v1
   pull_request:
     branches:
       - main
@@ -33,6 +34,7 @@ jobs:
       DATABASE_URL: "postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public"
       DIRECT_URL: "postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public"
       NODE_ENV: test
+      ALLOW_DEV_SEED: 'true'
 
     defaults:
       run:
@@ -75,6 +77,15 @@ jobs:
       - name: Run Live PostgreSQL Constraint Integration Tests
         run: |
           npm run test:db 2>&1 | tee test-results.log
+
+      - name: Test authenticated prototype against an isolated PostgreSQL schema
+        run: npm run test:integration
+
+      - name: Install and check frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run check
 
       - name: Publish Test Summary
         if: always()
