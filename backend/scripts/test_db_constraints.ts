@@ -854,8 +854,10 @@ async function runConstraintTests() {
 
   // 27. Connection-loss / crash recovery: terminated connection drops session lock and permits subsequent recovery
   await assertResolves('D3-D: Terminated worker connection drops session lock and permits subsequent recovery', async () => {
+    const currentSub = await prisma.subscription.findUniqueOrThrow({ where: { id: testSubscription.id } });
+    const asOf = currentSub.nextBillingDate?.toISOString().split('T')[0] ?? '2026-03-01';
     const crashTestRun = await initializeBillingRun(prisma, {
-      asOfDate: '2027-06-01',
+      asOfDate: asOf,
       periodLimit: 10,
       subscriptionIdFilter: testSubscription.id,
     });
