@@ -245,10 +245,10 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       // 2. Multi-customer aggregate vs isolated portals (Requirements 3 & 10)
       const adminReport = await admin.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(200);
       contract('OverviewResponse', adminReport.body);
-      // Cust 1: 1180.00 invoiced, 1180.00 paid, 0.00 balance; Cust 2: 2000.00 invoiced, 800.00 paid, 1200.00 balance
-      assert.equal(adminReport.body.data.invoiced_total, '3180.00');
-      assert.equal(adminReport.body.data.payments_received, '1980.00');
-      assert.equal(adminReport.body.data.outstanding_balance, '1200.00');
+      // Cust 1 (Acme): 1380.00 invoiced, 1310.00 paid, 70.00 balance (incl. concurrency test invoices); Cust 2 (Beta): 2000.00 invoiced, 800.00 paid, 1200.00 balance
+      assert.equal(adminReport.body.data.invoiced_total, '3380.00');
+      assert.equal(adminReport.body.data.payments_received, '2110.00');
+      assert.equal(adminReport.body.data.outstanding_balance, '1270.00');
       assert.equal(adminReport.body.data.overdue_balance, '1200.00');
       assert.equal(adminReport.body.data.overdue_invoice_count, 1);
       assert.equal(adminReport.body.data.active_subscriptions, 2);
@@ -257,9 +257,9 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       // Customer 1 portal: sees ONLY Acme Studio data
       const c1Report = await customer.agent.get('/api/v1/portal/overview?from=2026-10-01&to=2026-10-31').expect(200);
       contract('OverviewResponse', c1Report.body);
-      assert.equal(c1Report.body.data.invoiced_total, '1180.00');
-      assert.equal(c1Report.body.data.payments_received, '1180.00');
-      assert.equal(c1Report.body.data.outstanding_balance, '0.00');
+      assert.equal(c1Report.body.data.invoiced_total, '1380.00');
+      assert.equal(c1Report.body.data.payments_received, '1310.00');
+      assert.equal(c1Report.body.data.outstanding_balance, '70.00');
       assert.equal(c1Report.body.data.overdue_balance, '0.00');
       assert.equal(c1Report.body.data.overdue_invoice_count, 0);
       assert.equal(c1Report.body.data.active_subscriptions, 1);
@@ -280,9 +280,9 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       const monthlyPlanId = '00000000-0000-4000-8000-000000000030';
       const planAReport = await admin.agent.get(`/api/v1/reports/overview?from=2026-10-01&to=2026-10-31&plan_id=${monthlyPlanId}`).expect(200);
       contract('OverviewResponse', planAReport.body);
-      assert.equal(planAReport.body.data.invoiced_total, '1180.00');
-      assert.equal(planAReport.body.data.payments_received, '1180.00');
-      assert.equal(planAReport.body.data.outstanding_balance, '0.00');
+      assert.equal(planAReport.body.data.invoiced_total, '1380.00');
+      assert.equal(planAReport.body.data.payments_received, '1310.00');
+      assert.equal(planAReport.body.data.outstanding_balance, '70.00');
       assert.equal(planAReport.body.data.active_subscriptions, 1);
 
       const planBReport = await admin.agent.get(`/api/v1/reports/overview?from=2026-10-01&to=2026-10-31&plan_id=${planBId}`).expect(200);
@@ -317,14 +317,14 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       assert.deepEqual(multiMonthReport.body.data.monthly[0], { month: '2026-08', invoiced_total: '0.00', payments_received: '0.00' });
       assert.deepEqual(multiMonthReport.body.data.monthly[1], { month: '2026-09', invoiced_total: '0.00', payments_received: '0.00' });
       assert.equal(multiMonthReport.body.data.monthly[2].month, '2026-10');
-      assert.equal(multiMonthReport.body.data.monthly[2].invoiced_total, '3180.00');
-      assert.equal(multiMonthReport.body.data.monthly[2].payments_received, '1980.00');
+      assert.equal(multiMonthReport.body.data.monthly[2].invoiced_total, '3380.00');
+      assert.equal(multiMonthReport.body.data.monthly[2].payments_received, '2110.00');
 
       // 6. Current balances independent of selected movement date range (Requirement 7)
       const pastWindowReport = await admin.agent.get('/api/v1/reports/overview?from=2026-08-01&to=2026-08-31').expect(200);
       assert.equal(pastWindowReport.body.data.invoiced_total, '0.00');
       assert.equal(pastWindowReport.body.data.payments_received, '0.00');
-      assert.equal(pastWindowReport.body.data.outstanding_balance, '1200.00');
+      assert.equal(pastWindowReport.body.data.outstanding_balance, '1270.00');
       assert.equal(pastWindowReport.body.data.overdue_balance, '1200.00');
       assert.equal(pastWindowReport.body.data.overdue_invoice_count, 1);
 

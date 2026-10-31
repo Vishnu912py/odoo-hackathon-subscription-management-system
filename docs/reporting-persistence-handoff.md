@@ -185,18 +185,18 @@ Instead of loading full invoice, payment, and subscription entities into Node.js
 The PostgreSQL integration suite in `backend/test/integration/prototype.test.ts` exercises the reporting endpoints against real PostgreSQL:
 
 | Scenario / Fixture State | Invoiced Total | Payments Received | Outstanding Balance | Overdue Balance | Overdue Invoices | Active Subs | Paused Subs |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Fresh Seed (1–31 Oct 2026)** | `1180.00` | `500.00` | `680.00` | `680.00` | `1` | `1` | `0` |
 | **Full Payment Recorded** | `1180.00` | `1180.00` | `0.00` | `0.00` | `0` | `1` | `0` |
-| **Multi-Customer Admin View** | `3180.00` | `1980.00` | `1200.00` | `1200.00` | `1` | `2` | `0` |
-| **Customer 1 Portal (Acme)** | `1180.00` | `1180.00` | `0.00` | `0.00` | `0` | `1` | `0` |
+| **Multi-Customer Admin View** | `3380.00` | `2110.00` | `1270.00` | `1200.00` | `1` | `2` | `0` |
+| **Customer 1 Portal (Acme)** | `1380.00` | `1310.00` | `70.00` | `0.00` | `0` | `1` | `0` |
 | **Customer 2 Portal (Beta)** | `2000.00` | `800.00` | `1200.00` | `1200.00` | `1` | `1` | `0` |
-| **Plan A Filter (Admin)** | `1180.00` | `1180.00` | `0.00` | `0.00` | `0` | `1` | `0` |
+| **Plan A Filter (Admin)** | `1380.00` | `1310.00` | `70.00` | `0.00` | `0` | `1` | `0` |
 | **Plan B Filter (Admin)** | `2000.00` | `800.00` | `1200.00` | `1200.00` | `1` | `1` | `0` |
-| **Date Boundary (10 Oct only)** | `2000.00` | `0.00` | `1200.00` | `1200.00` | `1` | `2` | `0` |
-| **Date Boundary (25 Oct only)** | `0.00` | `800.00` | `1200.00` | `1200.00` | `1` | `2` | `0` |
-| **Inactive Past Window (Aug)** | `0.00` | `0.00` | `1200.00` | `1200.00` | `1` | `2` | `0` |
-| **Subscription Classifications** | `3180.00` | `1980.00` | `1200.00` | `1200.00` | `1` | `2` | `1` |
+| **Date Boundary (10 Oct only)** | `2000.00` | `0.00` | `1270.00` | `1200.00` | `1` | `2` | `0` |
+| **Date Boundary (25 Oct only)** | `0.00` | `800.00` | `1270.00` | `1200.00` | `1` | `2` | `0` |
+| **Inactive Past Window (Aug)** | `0.00` | `0.00` | `1270.00` | `1200.00` | `1` | `2` | `0` |
+| **Subscription Classifications** | `3380.00` | `2110.00` | `1270.00` | `1200.00` | `1` | `2` | `1` |
 
 ---
 
