@@ -7,9 +7,14 @@ import './live.css'
 import InvoiceDetails from './InvoiceDetails'
 import PasswordRecovery from './PasswordRecovery'
 import StaffManagement from './StaffManagement'
+import ProductsManagement from '../catalog/ProductsManagement'
+import PlansManagement from '../catalog/PlansManagement'
+import TaxesManagement from '../catalog/TaxesManagement'
+import DiscountsManagement from '../catalog/DiscountsManagement'
+import TemplatesManagement from '../catalog/TemplatesManagement'
+import { getAllowedTabsForRole, isTabAllowedForRole, type NavTab } from '../catalog/navigation'
 
 type Page = 'Overview' | 'Subscriptions' | 'Invoices' | 'Payments'
-const pages: Page[] = ['Overview', 'Subscriptions', 'Invoices', 'Payments']
 
 function today() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
@@ -176,7 +181,7 @@ export default function LiveWorkspace() {
   const [session, setSession] = useState<Session | null>(null)
   const [restoring, setRestoring] = useState(true)
   const [revision, setRevision] = useState(0)
-  const [page, setPage] = useState<Page | 'Staff'>('Overview')
+  const [page, setPage] = useState<NavTab>('Overview')
   const [error, setError] = useState<unknown>(null)
   const [signingOut, setSigningOut] = useState(false)
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('reset') ?? '')
@@ -193,6 +198,10 @@ export default function LiveWorkspace() {
     }).finally(() => { if (!controller.signal.aborted) setRestoring(false) })
     return () => controller.abort()
   }, [revision])
+
+  // Derive the active tab safely based on role permissions
+  const activeTab: NavTab = session && !isTabAllowedForRole(page, session.user.role) ? 'Overview' : page
+
   async function signOut() {
     setSigningOut(true); setError(null)
     try { await api.logout(); setSession(null) }
@@ -212,8 +221,34 @@ export default function LiveWorkspace() {
     </div>
     {error !== null && <Failure error={error} />}
     {restoring ? <p role="status">Restoring session…</p> : !session ? <SignIn onSession={value => { setError(null); setSession(value); setPage('Overview') }} /> : <>
-      <nav className="live-tabs" aria-label="Live records">{(session.user.role === 'admin' ? [...pages, 'Staff' as const] : pages).map(item => <button key={item} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}>{item}</button>)}</nav>
-      {page === 'Staff' && session.user.role === 'admin' ? <StaffManagement onExpired={expire} /> : <Records key={`${session.user.id}-${page}`} session={session} page={page === 'Staff' ? 'Overview' : page} onExpired={expire} />}
+      <nav className="live-tabs" aria-label="Live records">
+        {getAllowedTabsForRole(session.user.role).map(item => (
+          <button key={item} aria-current={activeTab === item ? 'page' : undefined} onClick={() => setPage(item)}>
+            {item}
+          </button>
+        ))}
+      </nav>
+
+      {/* Role permission check */}
+      {!isTabAllowedForRole(activeTab, session.user.role) ? (
+        <div className="live-error" role="alert">
+          <p>Your account ({session.user.role}) does not have permission to access {activeTab}. Administrator access required.</p>
+        </div>
+      ) : activeTab === 'Staff' ? (
+        <StaffManagement onExpired={expire} />
+      ) : activeTab === 'Products' ? (
+        <ProductsManagement onExpired={expire} />
+      ) : activeTab === 'Plans' ? (
+        <PlansManagement onExpired={expire} />
+      ) : activeTab === 'Taxes' ? (
+        <TaxesManagement onExpired={expire} />
+      ) : activeTab === 'Discounts' ? (
+        <DiscountsManagement onExpired={expire} />
+      ) : activeTab === 'Templates' ? (
+        <TemplatesManagement onExpired={expire} />
+      ) : (
+        <Records key={`${session.user.id}-${activeTab}`} session={session} page={activeTab as Page} onExpired={expire} />
+      )}
     </>}
   </main>
 }
