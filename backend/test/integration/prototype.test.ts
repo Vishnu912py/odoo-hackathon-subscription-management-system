@@ -67,7 +67,13 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
         [`/invoices/${invoiceId}/payments`, 'PaymentListResponse'], ['/reports/overview?from=2026-10-01&to=2026-10-31', 'OverviewResponse'],
       ]) { const response = await admin.agent.get('/api/v1' + path).expect(200); contract(name!, response.body); }
       const report = await admin.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(200);
-      assert.equal(report.body.data.invoiced_total, '1180.00'); assert.equal(report.body.data.payments_received, '500.00'); assert.equal(report.body.data.outstanding_balance, '680.00');
+      assert.equal(report.body.data.invoiced_total, '1180.00');
+      assert.equal(report.body.data.payments_received, '500.00');
+      assert.equal(report.body.data.outstanding_balance, '680.00');
+      assert.equal(report.body.data.overdue_balance, '680.00');
+      assert.equal(report.body.data.overdue_invoice_count, 1);
+      assert.equal(report.body.data.active_subscriptions, 1);
+      assert.equal(report.body.data.paused_subscriptions, 0);
       const subscriptions = await admin.agent.get('/api/v1/subscriptions').expect(200);
       assert.equal(subscriptions.body.data[0].estimated_total, '1180.00');
     });
@@ -115,7 +121,10 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       seed();
       const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } }); assert.equal(invoice.status, 'PAID'); assert.equal(invoice.amountPaid.toFixed(2), '1180.00');
       const report = await staff.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(200);
-      assert.equal(report.body.data.payments_received, '1180.00'); assert.equal(report.body.data.outstanding_balance, '0.00');
+      assert.equal(report.body.data.payments_received, '1180.00');
+      assert.equal(report.body.data.outstanding_balance, '0.00');
+      assert.equal(report.body.data.overdue_balance, '0.00');
+      assert.equal(report.body.data.overdue_invoice_count, 0);
       assert.equal(report.body.data.monthly[0].payments_received, '1180.00');
     });
     await t.test('concurrent independent payments cannot overpay an invoice', async () => {
@@ -140,6 +149,262 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       assert.equal(await prisma.payment.count({ where: { invoiceId: id } }), 1);
       assert.equal((await prisma.invoice.findUniqueOrThrow({ where: { id } })).amountPaid.toFixed(2), '50.00');
     });
+    await t.test('D4: filterable reporting persistence, customer scoping & fixture reconciliation', async () => {
+      // 1. Setup second customer with distinct plan, subscription, invoice, and payment
+      const adminUser = await prisma.user.findFirstOrThrow({ where: { email: 'admin@brightloop.io' } });
+      const demoHash = adminUser.passwordHash;
+      const planBId = randomUUID();
+      const cust2UserId = randomUUID();
+      const cust2ProfileId = randomUUID();
+      const cust2SubId = randomUUID();
+      const cust2InvId = randomUUID();
+      const cust2PayId = randomUUID();
+      let pausedSubId: string | undefined;
+      let futureSubId: string | undefined;
+      let expiredSubId: string | undefined;
+
+      try {
+        await prisma.plan.create({
+          data: {
+            id: planBId,
+            name: 'Beta Enterprise Plan',
+            price: '2000.00',
+            billingInterval: 'MONTHLY',
+            isActive: true,
+            availableFrom: new Date('2026-01-01'),
+          },
+        });
+
+      await prisma.user.create({
+        data: {
+          id: cust2UserId,
+          email: 'cust2@example.test',
+          passwordHash: demoHash,
+          role: 'CUSTOMER',
+          displayName: 'Beta Labs Accounts',
+          isActive: true,
+        },
+      });
+
+      await prisma.customer.create({
+        data: {
+          id: cust2ProfileId,
+          userId: cust2UserId,
+          name: 'Beta Labs',
+          billingEmail: 'billing@betalabs.test',
+        },
+      });
+
+      await prisma.subscription.create({
+        data: {
+          id: cust2SubId,
+          number: `SUB-BETA-${randomUUID().slice(0, 6)}`,
+          customerId: cust2ProfileId,
+          planId: planBId,
+          status: 'ACTIVE',
+          currency: 'INR',
+          billingInterval: 'MONTHLY',
+          startDate: new Date('2026-10-01'),
+          expiryDate: new Date('2027-10-01'),
+          isPaused: false,
+        },
+      });
+
+      // Invoice: issueDate 2026-10-10, dueDate 2026-10-20 (< 2026-10-31 as_of), total 2000.00, amountPaid 800.00 -> balance 1200.00
+      await prisma.invoice.create({
+        data: {
+          id: cust2InvId,
+          number: `INV-BETA-${randomUUID().slice(0, 6)}`,
+          subscriptionId: cust2SubId,
+          periodStart: new Date('2026-10-01'),
+          periodEnd: new Date('2026-11-01'),
+          issueDate: new Date('2026-10-10'),
+          dueDate: new Date('2026-10-20'),
+          status: 'CONFIRMED',
+          currency: 'INR',
+          customerNameSnapshot: 'Beta Labs',
+          billingEmailSnapshot: 'billing@betalabs.test',
+          subtotal: '2000.00',
+          total: '2000.00',
+          amountPaid: '800.00',
+        },
+      });
+
+      // Payment: paymentDate 2026-10-25
+      await prisma.payment.create({
+        data: {
+          id: cust2PayId,
+          invoiceId: cust2InvId,
+          recordedById: adminUser.id,
+          idempotencyKey: randomUUID(),
+          method: 'bank_transfer',
+          amount: '800.00',
+          paymentDate: new Date('2026-10-25'),
+          note: 'Beta Labs partial payment',
+        },
+      });
+
+      const cust2 = await login('cust2@example.test');
+
+      // 2. Multi-customer aggregate vs isolated portals (Requirements 3 & 10)
+      const adminReport = await admin.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(200);
+      contract('OverviewResponse', adminReport.body);
+      // Cust 1 (Acme): 1380.00 invoiced, 1310.00 paid, 70.00 balance (incl. concurrency test invoices); Cust 2 (Beta): 2000.00 invoiced, 800.00 paid, 1200.00 balance
+      assert.equal(adminReport.body.data.invoiced_total, '3380.00');
+      assert.equal(adminReport.body.data.payments_received, '2110.00');
+      assert.equal(adminReport.body.data.outstanding_balance, '1270.00');
+      assert.equal(adminReport.body.data.overdue_balance, '1200.00');
+      assert.equal(adminReport.body.data.overdue_invoice_count, 1);
+      assert.equal(adminReport.body.data.active_subscriptions, 2);
+      assert.equal(adminReport.body.data.paused_subscriptions, 0);
+
+      // Customer 1 portal: sees ONLY Acme Studio data
+      const c1Report = await customer.agent.get('/api/v1/portal/overview?from=2026-10-01&to=2026-10-31').expect(200);
+      contract('OverviewResponse', c1Report.body);
+      assert.equal(c1Report.body.data.invoiced_total, '1380.00');
+      assert.equal(c1Report.body.data.payments_received, '1310.00');
+      assert.equal(c1Report.body.data.outstanding_balance, '70.00');
+      assert.equal(c1Report.body.data.overdue_balance, '0.00');
+      assert.equal(c1Report.body.data.overdue_invoice_count, 0);
+      assert.equal(c1Report.body.data.active_subscriptions, 1);
+      assert.equal(c1Report.body.data.paused_subscriptions, 0);
+
+      // Customer 2 portal: sees ONLY Beta Labs data
+      const c2Report = await cust2.agent.get('/api/v1/portal/overview?from=2026-10-01&to=2026-10-31').expect(200);
+      contract('OverviewResponse', c2Report.body);
+      assert.equal(c2Report.body.data.invoiced_total, '2000.00');
+      assert.equal(c2Report.body.data.payments_received, '800.00');
+      assert.equal(c2Report.body.data.outstanding_balance, '1200.00');
+      assert.equal(c2Report.body.data.overdue_balance, '1200.00');
+      assert.equal(c2Report.body.data.overdue_invoice_count, 1);
+      assert.equal(c2Report.body.data.active_subscriptions, 1);
+      assert.equal(c2Report.body.data.paused_subscriptions, 0);
+
+      // 3. Plan filtering across all metrics (Requirement 4)
+      const monthlyPlanId = '00000000-0000-4000-8000-000000000030';
+      const planAReport = await admin.agent.get(`/api/v1/reports/overview?from=2026-10-01&to=2026-10-31&plan_id=${monthlyPlanId}`).expect(200);
+      contract('OverviewResponse', planAReport.body);
+      assert.equal(planAReport.body.data.invoiced_total, '1380.00');
+      assert.equal(planAReport.body.data.payments_received, '1310.00');
+      assert.equal(planAReport.body.data.outstanding_balance, '70.00');
+      assert.equal(planAReport.body.data.active_subscriptions, 1);
+
+      const planBReport = await admin.agent.get(`/api/v1/reports/overview?from=2026-10-01&to=2026-10-31&plan_id=${planBId}`).expect(200);
+      contract('OverviewResponse', planBReport.body);
+      assert.equal(planBReport.body.data.invoiced_total, '2000.00');
+      assert.equal(planBReport.body.data.payments_received, '800.00');
+      assert.equal(planBReport.body.data.outstanding_balance, '1200.00');
+      assert.equal(planBReport.body.data.overdue_balance, '1200.00');
+      assert.equal(planBReport.body.data.overdue_invoice_count, 1);
+      assert.equal(planBReport.body.data.active_subscriptions, 1);
+
+      // 4. Date boundaries: separate inclusive from/to for invoices vs payments (Requirement 5)
+      // Invoice on 2026-10-10, no payments on that date
+      const invBoundaryReport = await admin.agent.get('/api/v1/reports/overview?from=2026-10-10&to=2026-10-10').expect(200);
+      assert.equal(invBoundaryReport.body.data.invoiced_total, '2000.00');
+      assert.equal(invBoundaryReport.body.data.payments_received, '0.00');
+
+      // Payment on 2026-10-25, no invoices on that date
+      const payBoundaryReport = await admin.agent.get('/api/v1/reports/overview?from=2026-10-25&to=2026-10-25').expect(200);
+      assert.equal(payBoundaryReport.body.data.invoiced_total, '0.00');
+      assert.equal(payBoundaryReport.body.data.payments_received, '800.00');
+
+      // Window with no activity
+      const idleReport = await admin.agent.get('/api/v1/reports/overview?from=2026-10-02&to=2026-10-09').expect(200);
+      assert.equal(idleReport.body.data.invoiced_total, '0.00');
+      assert.equal(idleReport.body.data.payments_received, '0.00');
+
+      // 5. Monthly grouping across multiple months including zero-activity buckets (Requirement 6)
+      const multiMonthReport = await admin.agent.get('/api/v1/reports/overview?from=2026-08-01&to=2026-10-31').expect(200);
+      contract('OverviewResponse', multiMonthReport.body);
+      assert.equal(multiMonthReport.body.data.monthly.length, 3);
+      assert.deepEqual(multiMonthReport.body.data.monthly[0], { month: '2026-08', invoiced_total: '0.00', payments_received: '0.00' });
+      assert.deepEqual(multiMonthReport.body.data.monthly[1], { month: '2026-09', invoiced_total: '0.00', payments_received: '0.00' });
+      assert.equal(multiMonthReport.body.data.monthly[2].month, '2026-10');
+      assert.equal(multiMonthReport.body.data.monthly[2].invoiced_total, '3380.00');
+      assert.equal(multiMonthReport.body.data.monthly[2].payments_received, '2110.00');
+
+      // 6. Current balances independent of selected movement date range (Requirement 7)
+      const pastWindowReport = await admin.agent.get('/api/v1/reports/overview?from=2026-08-01&to=2026-08-31').expect(200);
+      assert.equal(pastWindowReport.body.data.invoiced_total, '0.00');
+      assert.equal(pastWindowReport.body.data.payments_received, '0.00');
+      assert.equal(pastWindowReport.body.data.outstanding_balance, '1270.00');
+      assert.equal(pastWindowReport.body.data.overdue_balance, '1200.00');
+      assert.equal(pastWindowReport.body.data.overdue_invoice_count, 1);
+
+      // 7. Subscription classification: active, paused, future, expired (Requirement 8)
+      const pausedSub = await prisma.subscription.create({
+        data: {
+          id: randomUUID(),
+          number: `SUB-PAUSED-${randomUUID().slice(0, 6)}`,
+          customerId: cust2ProfileId,
+          planId: planBId,
+          status: 'ACTIVE',
+          currency: 'INR',
+          billingInterval: 'MONTHLY',
+          startDate: new Date('2026-10-01'),
+          expiryDate: new Date('2027-10-01'),
+          isPaused: true,
+        },
+      });
+      pausedSubId = pausedSub.id;
+
+      const futureSub = await prisma.subscription.create({
+        data: {
+          id: randomUUID(),
+          number: `SUB-FUTURE-${randomUUID().slice(0, 6)}`,
+          customerId: cust2ProfileId,
+          planId: planBId,
+          status: 'ACTIVE',
+          currency: 'INR',
+          billingInterval: 'MONTHLY',
+          startDate: new Date('2026-11-15'),
+          expiryDate: new Date('2027-11-15'),
+          isPaused: false,
+        },
+      });
+      futureSubId = futureSub.id;
+
+      const expiredSub = await prisma.subscription.create({
+        data: {
+          id: randomUUID(),
+          number: `SUB-EXPIRED-${randomUUID().slice(0, 6)}`,
+          customerId: cust2ProfileId,
+          planId: planBId,
+          status: 'ACTIVE',
+          currency: 'INR',
+          billingInterval: 'MONTHLY',
+          startDate: new Date('2026-01-01'),
+          expiryDate: new Date('2026-10-15'),
+          isPaused: false,
+        },
+      });
+      expiredSubId = expiredSub.id;
+
+      const subClassReport = await admin.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(200);
+      assert.equal(subClassReport.body.data.active_subscriptions, 2);
+      assert.equal(subClassReport.body.data.paused_subscriptions, 1);
+
+      // 8. Authorization and scope-tampering prevention (Requirement 9)
+      await customer.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(403);
+      await staff.agent.get('/api/v1/portal/overview?from=2026-10-01&to=2026-10-31').expect(403);
+      // Query validation rejects unexpected client-supplied customer_id on portal route with 400 Bad Request
+      await customer.agent.get(`/api/v1/portal/overview?from=2026-10-01&to=2026-10-31&customer_id=${cust2ProfileId}`).expect(400);
+      } finally {
+        // Guaranteed cleanup of D4 fixtures so subsequent test assertions on total counts remain pristine
+        await prisma.payment.deleteMany({ where: { id: cust2PayId } });
+        await prisma.invoice.deleteMany({ where: { id: cust2InvId } });
+        const subIds = [cust2SubId, pausedSubId, futureSubId, expiredSubId].filter(Boolean) as string[];
+        if (subIds.length > 0) {
+          await prisma.subscription.deleteMany({ where: { id: { in: subIds } } });
+        }
+        await prisma.customer.deleteMany({ where: { id: cust2ProfileId } });
+        await prisma.session.deleteMany({ where: { user: { email: 'cust2@example.test' } } });
+        await prisma.user.deleteMany({ where: { id: cust2UserId } });
+        await prisma.plan.deleteMany({ where: { id: planBId } });
+      }
+    });
+
     await t.test('query allowlists, pagination, inclusive dates, and disabled accounts', async () => {
       await staff.agent.get('/api/v1/invoices?unexpected=x').expect(400);
       await staff.agent.get('/api/v1/invoices?page_size=101').expect(400);

@@ -6,6 +6,7 @@ import { validateBody, validateQuery, uuidPattern } from '../http/validation.js'
 import type { MailTransport } from './accounts/mail.js';
 import { authentication, actor, type Actor } from './accounts/routes.js';
 import { recordPayment } from './billing/payments.js';
+import { getOverviewReport } from './reporting/report-persistence.js';
 import { businessDate, day, Decimal, invoiceDetail, invoiceDetailInclude, invoiceInclude, invoiceSummary,
   paymentInclude, paymentView, subscriptionDetail, subscriptionInclude, subscriptionSummary } from './projections.js';
 
@@ -118,32 +119,15 @@ export function prototypeRouter(prisma: PrismaClient | undefined, config: Config
       const from = String(q.from), to = String(q.to);
       if (to > today || (Date.parse(to) - Date.parse(from)) / 86_400_000 >= 366) throw new HttpError(422, 'VALIDATION_ERROR', 'Reports cover at most 366 days and cannot end in the future.');
       const subscriptions: Prisma.SubscriptionWhereInput = { ...scope(user, q), ...(q.plan_id ? { planId: String(q.plan_id) } : {}) };
-      const current: Prisma.SubscriptionWhereInput = { ...subscriptions, status: 'ACTIVE', startDate: { lte: new Date(today) }, OR: [{ expiryDate: null }, { expiryDate: { gt: new Date(today) } }] };
-      const data = await prisma.$transaction(async tx => {
-        // One transaction connection: issue queries sequentially, all on the same snapshot.
-        const invoices = await tx.invoice.findMany({ where: { subscription: subscriptions, status: { in: ['CONFIRMED', 'PAID'] }, issueDate: dates(q) }, select: { issueDate: true, total: true } });
-        const payments = await tx.payment.findMany({ where: { invoice: { subscription: subscriptions }, paymentDate: dates(q) }, select: { paymentDate: true, amount: true } });
-        const balances = await tx.invoice.findMany({ where: { subscription: subscriptions, status: 'CONFIRMED' }, select: { dueDate: true, total: true, amountPaid: true } });
-        const active = await tx.subscription.count({ where: { ...current, isPaused: false } });
-        const paused = await tx.subscription.count({ where: { ...current, isPaused: true } });
-        const buckets = new Map<string, { month: string; invoiced_total: Prisma.Decimal; payments_received: Prisma.Decimal }>();
-        const cursor = new Date(`${from.slice(0, 7)}-01`);
-        while (day(cursor)!.slice(0, 7) <= to.slice(0, 7)) {
-          const month = day(cursor)!.slice(0, 7); buckets.set(month, { month, invoiced_total: new Decimal(0), payments_received: new Decimal(0) });
-          cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-        }
-        let invoiced = new Decimal(0), received = new Decimal(0), outstanding = new Decimal(0), overdue = new Decimal(0), count = 0;
-        for (const invoice of invoices) { invoiced = invoiced.plus(invoice.total); const bucket = buckets.get(day(invoice.issueDate)!.slice(0, 7))!; bucket.invoiced_total = bucket.invoiced_total.plus(invoice.total); }
-        for (const payment of payments) { received = received.plus(payment.amount); const bucket = buckets.get(day(payment.paymentDate)!.slice(0, 7))!; bucket.payments_received = bucket.payments_received.plus(payment.amount); }
-        for (const invoice of balances) {
-          const balance = invoice.total.minus(invoice.amountPaid);
-          if (balance.gt(0)) { outstanding = outstanding.plus(balance); if (day(invoice.dueDate)! < today) { overdue = overdue.plus(balance); count++; } }
-        }
-        return { from, to, as_of: today, currency: 'INR', active_subscriptions: active, paused_subscriptions: paused,
-          invoiced_total: invoiced.toFixed(2), payments_received: received.toFixed(2), outstanding_balance: outstanding.toFixed(2), overdue_balance: overdue.toFixed(2),
-          overdue_invoice_count: count, revenue_basis: 'invoiced_excluding_cancelled', monthly: [...buckets.values()].map(bucket => ({ month: bucket.month,
-            invoiced_total: bucket.invoiced_total.toFixed(2), payments_received: bucket.payments_received.toFixed(2) })) };
-      }, { isolationLevel: 'RepeatableRead' });
+      const data = await getOverviewReport(prisma, {
+        from,
+        to,
+        asOf: today,
+        planId: q.plan_id ? String(q.plan_id) : undefined,
+        subscriptionScope: subscriptions,
+        customerUserId: user.role === 'CUSTOMER' ? user.id : undefined,
+        customerId: user.role !== 'CUSTOMER' && q.customer_id ? String(q.customer_id) : undefined,
+      });
       res.json({ data });
     });
   }

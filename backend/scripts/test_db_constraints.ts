@@ -1116,40 +1116,92 @@ async function runConstraintTests() {
       throw new Error(`Schedule rewound! Expected nextBillingDate to remain 2027-06-01, but got ${subCheck.nextBillingDate?.toISOString()}`);
     }
 
-    // Step 5: BillingRun path with paused interval: a stale paused period [2027-04-01, 2027-05-01)
+    // Step 5: Reachable paused BillingRun scenario: candidate is due (nextBillingDate <= asOfDate)
+    // subMonotonic currently has nextBillingDate = 2027-06-01. A pause interval covers [2027-06-01, 2027-07-01).
     await prisma.subscriptionPauseInterval.create({
       data: {
         subscriptionId: subMonotonic.id,
-        startDate: new Date('2027-04-01T00:00:00.000Z'),
-        endDate: new Date('2027-05-01T00:00:00.000Z'),
-        reason: 'Historical pause',
+        startDate: new Date('2027-06-01T00:00:00.000Z'),
+        endDate: new Date('2027-07-01T00:00:00.000Z'),
+        reason: 'Reachable scheduled pause interval',
       },
     });
 
-    const stalePauseRun = await initializeBillingRun(prisma, {
-      asOfDate: '2027-04-01',
+    const pauseBillingRun = await initializeBillingRun(prisma, {
+      asOfDate: '2027-06-01',
       subscriptionIdFilter: subMonotonic.id,
     });
-    await executeBillingRun(prisma, stalePauseRun.id, { connectionString });
+    const pauseRunResult = await executeBillingRun(prisma, pauseBillingRun.id, { connectionString });
 
-    // Verify nextBillingDate was STILL NOT rewound by the paused run!
-    subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
-    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-06-01') {
-      throw new Error(`Schedule rewound by pause interval! Expected 2027-06-01, got ${subCheck.nextBillingDate?.toISOString()}`);
+    // Assert that the pause branch actually processed the subscription and skipped invoice creation
+    if (pauseRunResult.processedCount !== 1) {
+      throw new Error(`Expected pause BillingRun processedCount 1, got ${pauseRunResult.processedCount}`);
+    }
+    if (pauseRunResult.generatedCount !== 0) {
+      throw new Error(`Expected pause BillingRun generatedCount 0, got ${pauseRunResult.generatedCount}`);
+    }
+    if (pauseRunResult.reusedCount !== 0) {
+      throw new Error(`Expected pause BillingRun reusedCount 0, got ${pauseRunResult.reusedCount}`);
+    }
+    if (pauseRunResult.failedCount !== 0) {
+      throw new Error(`Expected pause BillingRun failedCount 0, got ${pauseRunResult.failedCount}`);
     }
 
-    // Step 6: Valid forward progression [2027-06-01, 2027-07-01) DOES advance
+    const pausedInvoice = await prisma.invoice.findFirst({
+      where: {
+        subscriptionId: subMonotonic.id,
+        periodStart: new Date('2027-06-01T00:00:00.000Z'),
+      },
+    });
+    if (pausedInvoice) {
+      throw new Error('Expected no invoice created for paused period in BillingRun');
+    }
+
+    // Verify nextBillingDate was monotonically advanced to 2027-07-01 by the pause branch
+    subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-07-01') {
+      throw new Error(`Expected nextBillingDate advanced to 2027-07-01 after pause, got ${subCheck.nextBillingDate?.toISOString()}`);
+    }
+
+    // Step 6: Test monotonic advancement independently against stale candidate condition
+    // Advance nextBillingDate forward to 2027-11-01
+    await prisma.subscription.update({
+      where: { id: subMonotonic.id },
+      data: { nextBillingDate: new Date('2027-11-01T00:00:00.000Z') },
+    });
+
+    // Simulate stale pause branch update attempting to advance to earlier periodEnd 2027-07-01
+    const stalePauseAdvance = await prisma.subscription.updateMany({
+      where: {
+        id: subMonotonic.id,
+        OR: [
+          { nextBillingDate: null },
+          { nextBillingDate: { lt: new Date('2027-07-01T00:00:00.000Z') } },
+        ],
+      },
+      data: { nextBillingDate: new Date('2027-07-01T00:00:00.000Z') },
+    });
+    if (stalePauseAdvance.count !== 0) {
+      throw new Error(`Stale pause candidate update should have matched 0 rows, but updated ${stalePauseAdvance.count}`);
+    }
+
+    subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-11-01') {
+      throw new Error(`Schedule rewound by stale pause candidate! Expected 2027-11-01, got ${subCheck.nextBillingDate?.toISOString()}`);
+    }
+
+    // Step 7: Valid forward progression [2027-11-01, 2027-12-01) DOES advance
     const invForward = await createSubscriptionInvoice(prisma, {
       subscriptionId: subMonotonic.id,
-      periodStart: '2027-06-01',
-      periodEnd: '2027-07-01',
+      periodStart: '2027-11-01',
+      periodEnd: '2027-12-01',
       advanceSchedule: true,
     });
     if (invForward.isReused) throw new Error('Expected new invoice for forward period');
 
     subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
-    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-07-01') {
-      throw new Error(`Forward advance failed! Expected nextBillingDate 2027-07-01, got ${subCheck.nextBillingDate?.toISOString()}`);
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-12-01') {
+      throw new Error(`Forward advance failed! Expected nextBillingDate 2027-12-01, got ${subCheck.nextBillingDate?.toISOString()}`);
     }
   });
 
