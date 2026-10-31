@@ -106,17 +106,22 @@ export async function executeBillingRun(
 ```
 
 #### Concurrency & Recovery Guarantees:
-1. **Run-Level Claiming:** Atomically acquires `pg_try_advisory_xact_lock(hashtextextended('billing_run:' || runId, 0))` and transitions `status: 'PENDING' -> 'IN_PROGRESS'`. Rejects concurrent execution with `BillingRunConcurrencyError(409, 'RUN_IN_PROGRESS')`.
-2. **Transactional Subscription Processing:** Each due subscription is processed within its own interactive database transaction:
+1. **Session-Level Advisory Lock on Dedicated Connection:** Acquired on a dedicated PostgreSQL connection (`pg.Client`) via `SELECT pg_try_advisory_lock(hashtextextended('billing_run:' || runId, 0))`. Held continuously for the entire duration of the batch, preventing any second worker from executing concurrently.
+2. **Protection Against Concurrent Resume:** Even when `allowResume: true` is passed, a competing worker cannot bypass an active worker's session lock; it is immediately rejected with `409 RUN_IN_PROGRESS`.
+3. **Automatic Crash Recovery via Socket Closure:** When a worker process crashes, is killed, or drops its connection, PostgreSQL automatically releases all session-level advisory locks tied to that connection. A subsequent worker can immediately acquire the lock and resume the run.
+4. **Abandoned vs Active Discrimination:**
+   - Active worker: Session lock acquisition fails (`acquired = false`) -> rejects with `409 RUN_IN_PROGRESS`.
+   - Abandoned run (worker died): Session lock acquisition succeeds (`acquired = true`) and `status === 'IN_PROGRESS'` -> requires `allowResume: true` to resume cleanly.
+5. **Transactional Subscription Processing:** Each due subscription is processed within its own interactive database transaction:
    - Acquires `pg_try_advisory_xact_lock(hashtextextended('sub_run:' || sub.id || ':' || periodStartStr, 0))`.
    - Creates invoice via `createSubscriptionInvoice(tx, ...)`.
    - Advances `subscription.nextBillingDate = periodEnd`.
-   - Incrementally and durably updates `BillingRun` counters (`subscriptionsProcessed`, `invoicesGenerated`, `invoicesReused`, `totalAmountBilled`) **within that exact same transaction**.
-3. **Crash Recovery Without Double-Counting:**
+   - Incrementally and durably updates `BillingRun` counters (`subscriptionsProcessed`, `invoicesGenerated`, `invoicesReused`, `totalAmountBilled`) within that exact same transaction.
+6. **Crash Recovery Without Double-Counting:**
    - If a crash occurs at subscription $N$, subscriptions $1 \dots N-1$ have their invoices, schedule advancements, and billing-run progress committed together.
    - Subscription $N$ rolls back cleanly.
    - Resuming the run via `executeBillingRun(prisma, runId, { allowResume: true })` queries due subscriptions whose `nextBillingDate <= asOfDate`. Subscriptions $1 \dots N-1$ are already advanced and skipped; subscription $N$ resumes cleanly.
-4. **Remaining Due & Pagination:** `hasMore` is evaluated directly by counting remaining subscriptions in PostgreSQL matching `nextBillingDate <= asOfDate` after the batch, eliminating counter-subtraction errors.
+7. **Remaining Due & Pagination:** `hasMore` is evaluated directly by counting remaining subscriptions in PostgreSQL matching `nextBillingDate <= asOfDate` after the batch, eliminating counter-subtraction errors.
 
 ---
 

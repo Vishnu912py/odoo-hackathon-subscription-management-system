@@ -7,6 +7,7 @@
  */
 
 import 'dotenv/config';
+import pg from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   PrismaClient,
@@ -791,8 +792,8 @@ async function runConstraintTests() {
     if (testRun.periodLimit !== 10) throw new Error(`Expected periodLimit 10, got ${testRun.periodLimit}`);
   });
 
-  // 26. Concurrent execution of the same billing run
-  await assertResolves('D3-D: Prevent concurrent execution of the same billing run', async () => {
+  // 26. Concurrent execution of the same billing run even with competing allowResume: true
+  await assertResolves('D3-D: Prevent concurrent execution of the same billing run even with competing allowResume: true', async () => {
     const concurrentRun = await initializeBillingRun(prisma, {
       asOfDate: '2027-06-01',
       periodLimit: 10,
@@ -800,8 +801,8 @@ async function runConstraintTests() {
     });
 
     const [res1, res2] = await Promise.allSettled([
-      executeBillingRun(prisma, concurrentRun.id),
-      executeBillingRun(prisma, concurrentRun.id),
+      executeBillingRun(prisma, concurrentRun.id, { connectionString }),
+      executeBillingRun(prisma, concurrentRun.id, { connectionString, allowResume: true }),
     ]);
 
     const successes = [res1, res2].filter(r => r.status === 'fulfilled');
@@ -810,9 +811,65 @@ async function runConstraintTests() {
     if (successes.length !== 1 || failures.length !== 1) {
       throw new Error(`Expected exactly 1 success and 1 concurrency rejection, got ${successes.length} succ, ${failures.length} fail`);
     }
+
+    const rejection = failures[0] as PromiseRejectedResult;
+    if (!rejection.reason?.message?.includes('currently being executed') && !rejection.reason?.message?.includes('RUN_IN_PROGRESS')) {
+      throw new Error(`Expected RUN_IN_PROGRESS rejection, got: ${rejection.reason}`);
+    }
   });
 
-  // 27. Historical pause interval skipping via SubscriptionPauseInterval
+  // 27. Connection-loss / crash recovery: terminated connection drops session lock and permits subsequent recovery
+  await assertResolves('D3-D: Terminated worker connection drops session lock and permits subsequent recovery', async () => {
+    const crashTestRun = await initializeBillingRun(prisma, {
+      asOfDate: '2027-06-01',
+      periodLimit: 10,
+      subscriptionIdFilter: testSubscription.id,
+    });
+
+    // 1. Simulate worker A opening a dedicated connection and claiming the session lock
+    const workerAClient = new pg.Client({ connectionString });
+    await workerAClient.connect();
+
+    const lockKey = `billing_run:${crashTestRun.id}`;
+    const claimRes = await workerAClient.query<{ acquired: boolean }>(
+      'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired',
+      [lockKey]
+    );
+    if (!claimRes.rows[0]?.acquired) {
+      await workerAClient.end();
+      throw new Error('Worker A failed to acquire initial session lock');
+    }
+
+    await prisma.billingRun.update({
+      where: { id: crashTestRun.id },
+      data: { status: 'IN_PROGRESS', startedAt: new Date() },
+    });
+
+    // 2. While Worker A connection is still active, Worker B attempt with allowResume: true MUST FAIL
+    let workerBFailedAsExpected = false;
+    try {
+      await executeBillingRun(prisma, crashTestRun.id, { connectionString, allowResume: true });
+    } catch (err: any) {
+      if (err?.message?.includes('currently being executed') || err?.errorCode === 'RUN_IN_PROGRESS') {
+        workerBFailedAsExpected = true;
+      }
+    }
+    if (!workerBFailedAsExpected) {
+      await workerAClient.end();
+      throw new Error('Worker B was erroneously allowed to execute while Worker A was actively holding the session lock!');
+    }
+
+    // 3. Simulate Worker A crashing abruptly by terminating its connection
+    await workerAClient.end();
+
+    // 4. Worker B resumes the abandoned run successfully now that the session lock was freed by PostgreSQL
+    const recoveredResult = await executeBillingRun(prisma, crashTestRun.id, { connectionString, allowResume: true });
+    if (recoveredResult.run.status !== 'COMPLETED') {
+      throw new Error(`Expected recovered run to complete, got status ${recoveredResult.run.status}`);
+    }
+  });
+
+  // 28. Historical pause interval skipping via SubscriptionPauseInterval
   await assertResolves('D3-D: Historical pause interval skips unbilled period without shifting recurrence anchor', async () => {
     await prisma.subscriptionPauseInterval.create({
       data: {
@@ -842,7 +899,7 @@ async function runConstraintTests() {
     if (pausedInv) throw new Error('Invoice was erroneously created for paused interval!');
   });
 
-  // 28. Simulated crash and durable recovery without double-counting
+  // 29. Simulated crash and durable recovery without double-counting
   await assertResolves('D3-D: Simulated crash and durable recovery correctly updates progress counters without duplicating invoices', async () => {
     const cust = await prisma.customer.findFirstOrThrow();
     const plan = await prisma.plan.findFirstOrThrow();
@@ -916,26 +973,26 @@ async function runConstraintTests() {
   console.log(' PART 6: RECURRENCE DATE ARITHMETIC & CALENDAR ANCHOR TESTS');
   console.log('================================================================================');
 
-  // 29. January 31 to February 28 (common year 2026)
+  // 30. January 31 to February 28 (common year 2026)
   await assertResolves('Calendar: January 31 to February 28 (common year 2026)', async () => {
     const res = computeNextPeriod({ periodStart: '2026-01-31', interval: 'MONTHLY' });
     if (res.periodEndStr !== '2026-02-28') throw new Error(`Expected 2026-02-28, got ${res.periodEndStr}`);
     if (res.anchorDay !== 31) throw new Error(`Expected anchorDay 31, got ${res.anchorDay}`);
   });
 
-  // 30. January 31 to February 29 (leap year 2028)
+  // 31. January 31 to February 29 (leap year 2028)
   await assertResolves('Calendar: January 31 to February 29 (leap year 2028)', async () => {
     const res = computeNextPeriod({ periodStart: '2028-01-31', interval: 'MONTHLY' });
     if (res.periodEndStr !== '2028-02-29') throw new Error(`Expected 2028-02-29, got ${res.periodEndStr}`);
   });
 
-  // 31. August 31 to September 30
+  // 32. August 31 to September 30
   await assertResolves('Calendar: August 31 to September 30', async () => {
     const res = computeNextPeriod({ periodStart: '2026-08-31', interval: 'MONTHLY' });
     if (res.periodEndStr !== '2026-09-30') throw new Error(`Expected 2026-09-30, got ${res.periodEndStr}`);
   });
 
-  // 32. Monthly recurrence across multiple months with anchorDay 31
+  // 33. Monthly recurrence across multiple months with anchorDay 31
   await assertResolves('Calendar: Monthly recurrence across multiple months preserves 31st anchor', async () => {
     const p1 = computeNextPeriod({ periodStart: '2026-01-31', interval: 'MONTHLY' }); // -> Feb 28
     const p2 = computeNextPeriod({ periodStart: p1.periodEnd, interval: 'MONTHLY', anchorDay: p1.anchorDay }); // -> Mar 31
@@ -948,7 +1005,7 @@ async function runConstraintTests() {
     if (p4.periodEndStr !== '2026-05-31') throw new Error(`p4: expected 2026-05-31, got ${p4.periodEndStr}`);
   });
 
-  // 33. Annual recurrence across leap-day boundaries
+  // 34. Annual recurrence across leap-day boundaries
   await assertResolves('Calendar: Annual recurrence across leap-day boundaries (2024-02-29 -> 2025-02-28 -> 2028-02-29)', async () => {
     const y1 = computeNextPeriod({ periodStart: '2024-02-29', interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
     const y2 = computeNextPeriod({ periodStart: y1.periodEnd, interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
@@ -961,7 +1018,7 @@ async function runConstraintTests() {
     if (y4.periodEndStr !== '2028-02-29') throw new Error(`y4 (leap year): expected 2028-02-29, got ${y4.periodEndStr}`);
   });
 
-  // 34. Continuous and gapless exclusive period-end property
+  // 35. Continuous and gapless exclusive period-end property
   await assertResolves('Calendar: Continuous and gapless exclusive period-end convention', async () => {
     const start = '2026-03-15';
     const period = computeNextPeriod({ periodStart: start, interval: 'MONTHLY' });
