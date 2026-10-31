@@ -2,26 +2,26 @@
 
 Status: an Express/TypeScript backend foundation exists in `backend/`; domain schema, migrations and business handlers are pending. Health checks and shared infrastructure are implemented; business contract operations return explicit 501 responses.
 
-The agreed architecture baseline is **React + Vite + TypeScript** on the frontend, **Node.js + Express + TypeScript** on the backend, **PostgreSQL** for relational persistence, and **Prisma ORM with Prisma Migrate**, now confirmed by Vishnu. Backend package location is `backend/`; schema and migrations live in `backend/prisma`. Node.js 24 and Prisma 7 are the backend toolchain; exact packages are pinned in backend/package.json and package-lock.json.
+The agreed architecture baseline is **React + Vite + TypeScript** on the frontend, **Node.js 24 + Express 5 + TypeScript** on the backend, **PostgreSQL 16** for relational persistence, and **Prisma ORM 7.10.1 with Prisma Migrate**, as confirmed by Vishnu. Backend package location is `backend/`; schema and migrations live in `backend/prisma`. Pinned packages are specified in `backend/package.json` and `backend/package-lock.json`.
 
 The [ER diagram and schema handoff](er-diagram.md) develops the proposed entities below into a refined PostgreSQL schema and data integrity specification.
 
-The newer [API contracts](api-contracts.md) define the HTTP/JSON interface baseline for Express REST operations. Sections 2 and 6 propose concrete defaults for the role matrix, currency/timezone, pricing, tax/discount order, scheduling and cancellation. Section 8 identifies schema additions (versioning, sessions, idempotency records, billing runs, and outbox). Treat the following register as the decision inventory; use the API guide's explicit defaults unless changed in a coordinated contract PR. Runtime versions and hosting remain unselected.
+The newer [API contracts](api-contracts.md) define the HTTP/JSON interface baseline for Express REST operations. Sections 2 and 6 propose concrete defaults for the role matrix, currency/timezone, pricing, tax/discount order, scheduling and cancellation. Section 8 identifies schema additions (versioning, sessions, idempotency records, billing runs, and outbox).
 
 ## Decisions register
 
-Vishnu confirmed the API guide's MVP billing defaults in the [PR #4 review](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/4#pullrequestreview-5721556703). That confirmation supersedes the unresolved labels below; Zenfox should reconcile the detailed decision register when aligning the schema. The ORM and repository location are also confirmed:
+The core billing policies and engineering choices have been formally confirmed by Team Lead Vishnu912py in the [PR #4 review](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/4#pullrequestreview-5721556703):
 
-| Decision | Status | Owner | Scope / Impact |
-| --- | --- | --- | --- |
-| 1. Plan-price allocation and line-total calculation | Unresolved | Vishnu | Confirm whether `plans.price` is an advertised bundle price that must equal the sum of default included product lines (as proposed in `api-contracts.md`), or whether line totals are calculated independently. |
-| 2. Tax and discount calculation order | Unresolved | Vishnu | Confirm whether discounts apply before tax (reducing the taxable base) or after tax, with concrete worked examples. |
-| 3. Discount stacking | Unresolved | Vishnu | Confirm whether multiple eligible discounts can stack on an invoice, or whether only the single highest-value discount applies (as proposed in `api-contracts.md`). |
-| 4. Cancellation and rebilling | Unresolved | Vishnu + Zenfox | Confirm whether a cancelled invoice permanently reserves its billing period, permits rebilling via a partial unique index, or requires an explicit replacement/revision record. |
-| 5. Pause/resume and billing-date arithmetic | Unresolved | Vishnu + Zenfox | Confirm whether resuming a paused subscription shifts the recurrence anchor or preserves the original anchor while skipping unbilled periods. |
-| 6. Partial and overpayment handling | Unresolved | Vishnu + Zenfox | Confirm whether overpayment is strictly rejected at the database/API boundary or credited toward future invoices. |
-| 7. Currency, timezone and rounding | Unresolved | Vishnu + Zenfox | Confirm baseline currency (INR), business timezone (Asia/Kolkata), and exact rounding rule (half-up to 2 decimals) before applying migrations. |
-| 8. Prisma confirmation and database package location | Confirmed by Vishnu | Vishnu + Zenfox | Prisma ORM/Migrate 7; backend package in `backend/`, schema/migrations in `backend/prisma`, generated client in ignored `backend/src/generated/prisma`. |
+| Decision | Status | Confirmed Policy / Implementation |
+| --- | --- | --- |
+| 1. Plan-price allocation and line totals | **Confirmed** | `plans.price` is the advertised base bundle price. The sum of default included product lines equals `plans.price`. Add-ons are priced separately. |
+| 2. Tax and discount calculation order | **Confirmed** | Discounts apply before tax (reducing the taxable base); taxes are exclusive and additive. Rounding is half-up to 2 decimals per line. |
+| 3. Discount stacking | **Confirmed** | No discount stacking in v1. Select the single eligible rule producing the greatest savings (ties resolved deterministically by rule UUID). |
+| 4. Cancellation and rebilling | **Confirmed** | Terminal cancellation permanently reserves the `(subscription_id, period_start)` identity. No same-period rebilling in v1. Requires 0 payments. |
+| 5. Pause/resume recurrence arithmetic | **Confirmed** | Preserve the original calendar recurrence anchor. Skip unbilled periods within effective pause intervals; resume on next original boundary without extending expiry. |
+| 6. Partial and overpayment handling | **Confirmed** | Multiple partial payments permitted; overpayments strictly rejected (`amount <= total - amount_paid`). Atomic balance updates. |
+| 7. Currency, timezone and rounding | **Confirmed** | Currency `INR`, business timezone `Asia/Kolkata`, exact decimal types (`NUMERIC(18,2)` totals, `NUMERIC(18,4)` unit prices/quantities, `NUMERIC(7,4)` rates). |
+| 8. Tooling and schema location | **Confirmed** | Prisma ORM 7.10.1 + Prisma Migrate; database schema and migrations located in `backend/prisma`, generated client in `backend/src/generated/prisma`. |
 
 ## Proposed entities
 
@@ -34,10 +34,14 @@ Zenfox owns schema definitions and persistence integrity; Vishnu reviews backend
 | Plan | Price, interval, minimum quantity, availability bounds and lifecycle policy flags |
 | Quotation template/line | Plan, validity days, products, variant composite FK `(variant_id, product_id)`, quantity and price defaults |
 | Subscription/line | Unique number, customer, plan, dates, payment terms, status; product/variant composite FK, quantity, price, taxes, and effective bounds |
+| Subscription pause intervals | Tracks historical effective pause intervals (`start_date`, `end_date`) for catch-up billing |
 | Invoice/line | Customer/subscription, billing period `(period_start, period_end)`, due date, status, totals and historical line/tax/discount snapshots |
-| Tax/discount | Tax rules with 0–100% rate; discount type/value, scope, thresholds, validity and usage limit |
+| Tax/discount | Tax rules with 0–100% rate; discount type/value, scope, thresholds, validity and usage limit (percentages $\le 100$) |
+| Discount rule activities | Historical activation and archival audit trail |
 | Discount usage | `discount_redemptions` consumed atomically per invoice and protected against retry duplication |
 | Payment | Invoice, method, positive amount, date, note, and unique `idempotency_key` |
+| Billing run | Batch recurring run execution state, parameters, and progress counters |
+| Invoice email outbox | Durable outbox for asynchronous email notification dispatch |
 
 ## Integration contract checklist
 

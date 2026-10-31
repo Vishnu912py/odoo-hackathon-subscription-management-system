@@ -1,0 +1,87 @@
+name: Database Integrity & PostgreSQL CI
+
+on:
+  push:
+    branches:
+      - main
+      - feat/db-schema
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  database-test:
+    name: PostgreSQL 16 Migrations & Constraint Integration (Prisma 7)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: brightloop
+          POSTGRES_PASSWORD: brightloop_test_password
+          POSTGRES_DB: subscription_management_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U brightloop -d subscription_management_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public"
+      DIRECT_URL: "postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public"
+      NODE_ENV: test
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Run Backend Comprehensive Check Suite
+        run: npm run check
+
+      - name: Run Static Schema & DDL Integrity Verifier
+        run: python scripts/verify_schema_integrity.py
+
+      - name: Apply Migrations (Deploy to Clean PostgreSQL 16)
+        run: npm run db:deploy
+
+      - name: Seed Database (Run 1)
+        run: npm run prisma:seed
+
+      - name: Seed Database (Run 2 - Idempotency Check)
+        run: npm run prisma:seed
+
+      - name: Run Live PostgreSQL Constraint Integration Tests
+        run: |
+          npm run test:db 2>&1 | tee test-results.log
+
+      - name: Publish Test Summary
+        if: always()
+        run: |
+          if [ -f test-results.log ]; then
+            echo "### Live PostgreSQL Integration Test Results" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            cat test-results.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi

@@ -2,24 +2,51 @@
 
 Build a unified platform for Brightloop Software to manage products, recurring plans, quotations, subscriptions, invoices, discounts, payments, and reporting.
 
-## Current status
+## Technology stack
 
-The [backend foundation](backend/README.md) now lives in `backend/`: Express/TypeScript, Prisma configuration, health endpoints, standard error handling and HTTP/configuration tests. Business API operations explicitly return 501 until implemented. Domain schema/migrations, auth and subscription/billing features are still pending. The UI remains a static wireframe.
+The confirmed technology stack is:
+- **Frontend:** React + Vite + TypeScript (`frontend/`)
+- **Backend:** Node.js 24 + Express 5 + TypeScript (`backend/`)
+- **Database:** PostgreSQL 16 + Prisma ORM 7.10.1 (`backend/prisma/`)
+- **Contracts:** OpenAPI 3.1 REST JSON (`docs/api/openapi.json`)
 
-The original documentation proposed an Odoo-based implementation. The supplied problem statement does not explicitly mandate that framework.
+## Directory structure
 
-The implementation baseline is **React + TypeScript, Express + TypeScript, PostgreSQL, Prisma ORM and Prisma Migrate**. Backend uses Node.js 24 and pinned Prisma 7 packages. Database schema/migrations live in `backend/prisma`. Deployment target remains open. The [API contracts](docs/api-contracts.md) define shared request/response formats and proposed MVP policies; they supersede older open questions where explicitly resolved.
+```text
+├── frontend/               # React + Vite + TypeScript web application
+├── backend/                # Express 5 + TypeScript API foundation
+│   ├── prisma/             # Single authoritative schema.prisma, migrations & seed
+│   ├── src/                # App, server, config, modules & db client
+│   ├── test/               # HTTP, config & database integration tests
+│   └── prisma.config.ts    # Prisma 7 CLI configuration
+├── docs/                   # Specifications, ER diagrams, API contracts, and wireframes
+└── .github/workflows/      # Automated CI workflows (PostgreSQL 16 service integration)
+```
 
-## Run the backend foundation
+## Backend setup and verification
 
-```powershell
+Prerequisites: **Node.js 24.x**, npm, and PostgreSQL for database-backed work.
+
+From repository root:
+
+```bash
 cd backend
 npm ci
 npm run prisma:generate
+cp .env.example .env
+```
+
+Edit `backend/.env` to point `DATABASE_URL` to your PostgreSQL database.
+
+```bash
+# Verify schema & run test suite
+npm run check
+
+# Start development server
 npm run dev
 ```
 
-Open `http://localhost:3000/health/live`. PostgreSQL is not required for liveness or HTTP tests; configure your own `DATABASE_URL` before expecting `/health/ready` to succeed. See [backend setup](backend/README.md) for environment variables, migration workflow and frontend proxy configuration. No business API is ready for end-to-end integration yet.
+Open `http://localhost:3000/health/live`. `/health/ready` verifies PostgreSQL connection readiness.
 
 ## Team responsibilities
 
@@ -31,11 +58,11 @@ Open `http://localhost:3000/health/live`. PostgreSQL is not required for livenes
 
 See [team responsibilities](docs/team-responsibilities.md) for work packages and handoffs.
 
-Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md), including relationships, constraints and unresolved billing policies.
+Database implementation starts with the [ER diagram and schema handoff](docs/er-diagram.md) and [API impact guide](docs/api-impact.md), including relationships, constraints and confirmed billing policies.
 
-Frontend implementation starts with the [UI wireframe and handoff](docs/ui-wireframe.md). Open `docs/wireframes/index.html` locally to explore the admin, staff and customer screens with sample data.
+Frontend implementation lives under `/frontend`.
 
-All three contributors should use the [API integration guide](docs/api-contracts.md), [OpenAPI file](docs/api/openapi.json) and [shared examples](docs/api/examples/manifest.json) before implementing their interfaces. These define the target contract, not running endpoints.
+All three contributors use the [API integration guide](docs/api-contracts.md), [OpenAPI file](docs/api/openapi.json) and [shared examples](docs/api/examples/manifest.json) before implementing their interfaces.
 
 ## Required user journey
 
@@ -47,10 +74,10 @@ Subscriptions follow **Draft -> Quotation -> Confirmed -> Active -> Closed**. Pa
 
 1. Read [requirements](docs/requirements.md) for statement-derived scope and acceptance checks.
 2. Read [team responsibilities](docs/team-responsibilities.md) for your work package.
-3. Settle unresolved choices in [architecture and contracts](docs/architecture.md) before building incompatible implementations.
+3. Review confirmed billing defaults in [architecture](docs/architecture.md) and [API impact](docs/api-impact.md).
 4. Follow [the roadmap](plan.md) and [contribution workflow](contributing.md).
 
-Application setup and test commands are maintained in [backend/README.md](backend/README.md). Database migrations and seed commands will be documented when Zenfox implements them. Never commit credentials or real customer data.
+Application setup and test commands are maintained in [backend/README.md](backend/README.md). Never commit credentials or real customer data.
 
 ## Documentation index
 
@@ -58,3 +85,4 @@ Application setup and test commands are maintained in [backend/README.md](backen
 - [`contributing.md`](./contributing.md): Contribution workflow and quality expectations.
 - [`plan.md`](./plan.md): Current implementation roadmap and milestones.
 - [`docs/README.md`](./docs/README.md): Shared documentation structure and expansion guidance.
+- [`backend/README.md`](./backend/README.md): Backend setup, Prisma 7 workflow, and test commands.

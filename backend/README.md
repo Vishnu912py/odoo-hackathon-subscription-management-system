@@ -11,8 +11,7 @@ Express + TypeScript server foundation with PostgreSQL through Prisma ORM and Pr
 - Exact-origin credentialed CORS, security headers, bounded JSON parsing, request IDs and sanitized error envelopes.
 - Graceful SIGINT/SIGTERM shutdown and tests for foundation behavior.
 - Module routing aligned to all 68 shared contract operations. **Each business operation currently returns HTTP 501 `NOT_IMPLEMENTED`.** There is no authentication, CRUD, billing, payment processing or background worker yet, and no fake successful responses.
-
-The Prisma schema intentionally contains only generator/datasource configuration. Zenfox adds real domain models and migrations here; no dummy tables or initial database migrations have been created. Do not deploy this foundation as a finished application.
+- Domain schema, reviewed PostgreSQL migrations, idempotent synthetic seeds and constraint integration tests implemented in `backend/prisma` and `backend/scripts` by Zenfox-690.
 
 ## Local setup
 
@@ -60,41 +59,46 @@ backend/
       subscriptions/        Lifecycle and subscription actions
       billing/              Invoices, payments and scheduled billing
       reporting/            Staff reports and owned customer summaries
-    generated/prisma/       Generated, ignored by Git
+    generated/prisma/       Generated Prisma 7 client, ignored by Git
   prisma/
-    schema.prisma           Shared schema source for Zenfox
-    migrations/             Commit generated and reviewed SQL migrations
+    schema.prisma           Shared schema source (32 domain models)
+    migrations/             Committed baseline and custom SQL migrations
+      20261031110000_init/              Base table definitions & relations
+      20261031110001_constraints.../    PostgreSQL CHECKs & functional indexes
+    seed.ts                 100% idempotent synthetic test seed fixtures
+  scripts/
+    test_db_constraints.ts  Live PostgreSQL constraint & concurrency test suite
+    verify_schema_integrity.py Static schema, DDL & ER integrity verifier
   prisma.config.ts          Prisma CLI paths and datasource URL
   test/                     HTTP and configuration tests
   .env.example              Safe variable names and local placeholders
 ```
 
-As each module is implemented, add `routes.ts`, `service.ts` and persistence helpers where useful, and replace its 501 registration. Mount implemented handlers before remaining placeholders; remove the relevant placeholder when its operation is fully implemented. Do not introduce separate frontend-facing routes or alternate field names outside the shared contract.
+## Database commands (Zenfox-690)
 
-## Prisma / migration workflow for Zenfox
+```powershell
+# 1. Static Validation (No database server required)
+npm run prisma:validate
+npm run prisma:generate
+npm run test:verify
+npm run typecheck
 
-Use **Prisma 7** (exact versions are pinned in package.json/lockfile). Its configuration and adapter setup use the Prisma 7 APIs; do not copy newer-major CLI instructions or upgrade only one of Prisma CLI/client/adapter packages independently.
+# 2. Live Database Operations (Requires running PostgreSQL)
+npm run db:deploy        # Apply committed migrations
+npm run prisma:seed      # Seed synthetic fixtures (idempotent, repeatable)
+npm run test:db          # Run live PostgreSQL constraint test suite
+```
 
-1. Add the agreed models to `backend/prisma/schema.prisma` and review the [ER design](../docs/er-diagram.md) together with [API database additions](../docs/api-contracts.md).
-2. Format, validate and regenerate after schema changes:
+## Key data integrity guarantees
 
-   ```powershell
-   npx prisma format
-   npm run prisma:validate
-   npm run prisma:generate
-   ```
-
-3. On your disposable development database, create an editable migration:
-
-   ```powershell
-   npm run db:migrate -- --name foundation --create-only
-   ```
-
-4. Add reviewed custom SQL where Prisma cannot express required constraints/indexes (for example `LOWER(email)` uniqueness and CHECK constraints). Do not remove existing migration history.
-5. Apply locally with `npm run db:migrate`. Commit schema and migration SQL together. Prisma Migrate development operations can need a separate shadow database/creation privileges; use local development credentials, never a shared production database.
-6. Apply reviewed, committed migrations in shared environments using `npm run db:deploy`. Do not use `db push` to bypass migration history. `db:deploy` is not meaningful until the first migration is committed.
-
-This scaffold has not applied migrations or seeded users. Do not treat `/health/ready` success as proof that domain tables exist. Prisma generated files stay untracked and are regenerated on each developer's machine.
+1. **Email Case-Insensitivity:** Functional index `users_email_lower_idx` (`CREATE UNIQUE INDEX users_email_lower_idx ON users (LOWER(email));`). Rejects duplicate emails differing only in casing.
+2. **Product Variant Ownership:** `product_variants` composite unique `(id, product_id)`. Line tables enforce composite FK referencing `(variant_id, product_id)`, preventing cross-product variant misassignment.
+3. **Exact Decimal Money:** `NUMERIC(18,2)` totals, `NUMERIC(18,4)` unit prices/quantities, and `NUMERIC(7,4)` tax rates. Binary floating-point arithmetic is prohibited.
+4. **Table-Level CHECK Constraints:** 13 database-level `CHECK` constraints reject negative prices, zero quantities, percentage discounts > 100%, and inverted dates.
+5. **Billing-Period Uniqueness:** `UNIQUE (subscription_id, period_start)` with `period_end > period_start` prevents overlapping or duplicate period generation.
+6. **Payment Idempotency:** `payments.idempotency_key` unique constraint rejects duplicate payments.
+7. **Discount Usage Protection:** `UNIQUE (discount_rule_id, invoice_id)` on `discount_redemptions` prevents duplicate redemption on the same invoice.
+8. **Durable BillingRun & Lifecycle History:** `BillingRun` stores all recovery inputs (`period_limit`, `subscription_id_filter`) and result counters; `SubscriptionPauseInterval` and `DiscountRuleActivity` preserve exact historical lifecycle intervals for catch-up billing.
 
 ## Validation and build
 
@@ -104,30 +108,11 @@ npm run build
 npm start
 ```
 
-`check` validates/generates Prisma, checks TypeScript, runs tests and compiles. Tests use injected database states; they do not prove a real PostgreSQL connection or database constraints. The production build expects the repository's `docs/api/openapi.json` alongside `backend`; copy it when packaging, not only `backend/dist`.
-
-## Frontend integration
-
-Albin can start by fetching `/health/live` and the local OpenAPI document. For Vite, use a development proxy:
-
-```ts
-server: {
-  proxy: {
-    '/api': 'http://127.0.0.1:3000',
-    '/health': 'http://127.0.0.1:3000',
-  },
-}
-```
-
-Use relative URLs and `credentials: 'include'`. The exact allowed origin is configurable with `FRONTEND_ORIGIN`; localhost and 127.0.0.1 are different browser origins. CORS is not authorization. Session/CSRF/role/ownership middleware must be implemented before any data-bearing route goes live. A 501 response means the operation is pending, not a successful integration.
-
-Use [API contracts](../docs/api-contracts.md) and [shared examples](../docs/api/examples/manifest.json) for payloads. Foundation-only responses add `NOT_IMPLEMENTED` (501), `PAYLOAD_TOO_LARGE` (413), and `UNSUPPORTED_MEDIA_TYPE` (415) using the same error envelope. Operational health routes are outside the business API and have their documented status payload.
+`check` validates/generates Prisma, checks TypeScript, runs tests and compiles.
 
 ## Next implementation steps
 
-1. Zenfox: domain schema/migrations, session/idempotency/outbox persistence and fixtures.
+1. Zenfox: domain schema/migrations, session/idempotency/outbox persistence and fixtures (Completed).
 2. Vishnu: session auth + CSRF + role/ownership enforcement; registration/login/reset; then one complete subscription path.
 3. Albin: shell/forms against contracts, then replace mocks when each backend handler exists.
 4. Add real-database integration tests for ownership, migrations, billing concurrency and payment replay before merging those features.
-
-The three findings from PR #2 remain tracked in the review conversation: payment replay must precede mutable status/version checks, cross-record invoice/discount ownership must be enforced, and confirmation-time snapshots must match API behavior. This scaffold does not implement or silently resolve those domain rules.
