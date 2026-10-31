@@ -231,6 +231,11 @@ export async function executeBillingRun(
             });
             batchProcessed++;
           } else if (invoiceResult.isReused) {
+            await tx.subscription.update({
+              where: { id: sub.id },
+              data: { nextBillingDate: periodEnd },
+            });
+
             await tx.billingRun.update({
               where: { id: runId },
               data: {

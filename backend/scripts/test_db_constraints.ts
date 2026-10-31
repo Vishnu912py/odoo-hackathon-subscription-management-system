@@ -854,12 +854,34 @@ async function runConstraintTests() {
 
   // 27. Connection-loss / crash recovery: terminated connection drops session lock and permits subsequent recovery
   await assertResolves('D3-D: Terminated worker connection drops session lock and permits subsequent recovery', async () => {
-    const currentSub = await prisma.subscription.findUniqueOrThrow({ where: { id: testSubscription.id } });
-    const asOf = currentSub.nextBillingDate?.toISOString().split('T')[0] ?? '2026-03-01';
+    const crashCust = await prisma.customer.findFirstOrThrow();
+    const crashPlan = await prisma.plan.findFirstOrThrow();
+    const crashProd = await prisma.product.findFirstOrThrow();
+
+    const crashSub = await prisma.subscription.create({
+      data: {
+        number: `SUB-CRASH-REC-${runId}`,
+        customerId: crashCust.id,
+        planId: crashPlan.id,
+        status: 'ACTIVE',
+        billingInterval: BillingInterval.MONTHLY,
+        startDate: new Date('2027-06-01T00:00:00.000Z'),
+        nextBillingDate: new Date('2027-06-01T00:00:00.000Z'),
+        lines: {
+          create: {
+            productId: crashProd.id,
+            description: 'Crash Recovery Item',
+            quantity: 1,
+            unitPrice: 100.00,
+          },
+        },
+      },
+    });
+
     const crashTestRun = await initializeBillingRun(prisma, {
-      asOfDate: asOf,
+      asOfDate: '2027-06-01',
       periodLimit: 10,
-      subscriptionIdFilter: testSubscription.id,
+      subscriptionIdFilter: crashSub.id,
     });
 
     // 1. Simulate worker A opening a dedicated connection and claiming the session lock

@@ -92,6 +92,19 @@ export async function createSubscriptionInvoice(
     });
 
     if (existing) {
+      if (advanceSchedule) {
+        const nextDate = new Date(pEnd);
+        const subForSched = await tx.subscription.findUnique({
+          where: { id: subscriptionId },
+          select: { nextBillingDate: true },
+        });
+        if (subForSched && (!subForSched.nextBillingDate || subForSched.nextBillingDate < nextDate)) {
+          await tx.subscription.update({
+            where: { id: subscriptionId },
+            data: { nextBillingDate: nextDate },
+          });
+        }
+      }
       return { invoice: existing, isReused: true };
     }
 
