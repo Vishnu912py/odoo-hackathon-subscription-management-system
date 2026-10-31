@@ -36,13 +36,9 @@ Open the **[hosted application](https://brightloop-subscriptions-alpha.vercel.ap
 
 **Show the difficult case, too:** rerun billing for the same period to demonstrate duplicate protection, or attempt an overpayment to show that the server rejects it. A failed billing period remains recoverable after its underlying issue is repaired.
 
-```mermaid
-flowchart LR
-    D[Draft] --> Q[Quotation] --> C[Confirmed] --> A[Active] --> X[Closed]
-    A --> B[Recurring billing]
-    B --> I[Draft invoice] --> F[Confirmed invoice] --> P[Paid]
-    P --> R[Reports and customer portal]
-```
+![Subscription lifecycle and recurring invoice-to-payment workflow](docs/images/subscription-workflow.png)
+
+[Editable diagram source](docs/diagrams/subscription-workflow.mmd)
 
 Pause, resume, renewal, add-ons and early closure follow the plan's policies and recurrence boundaries.
 
@@ -87,18 +83,9 @@ Actual browser-acceptance screenshot using synthetic, persisted test records. Th
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    U[Admin / Staff / Customer] --> UI[React + TypeScript / Vite]
-    UI --> API[Express 5 + TypeScript / Node.js 24]
-    API --> AUTH[Sessions / CSRF / Roles / Ownership]
-    API --> DOMAIN[Catalog / Lifecycle / Billing / Reports]
-    AUTH --> DB[(PostgreSQL / Prisma 7)]
-    DOMAIN --> DB
-    CRON[Supabase pg_cron / pg_net] -->|Authenticated maintenance| API
-    DOMAIN --> MAIL[Durable outbox / Gmail API]
-    DOMAIN --> PDF[PDFKit / Embedded Noto fonts]
-```
+![Application architecture connecting frontend, API, database, scheduler and delivery](docs/images/architecture.png)
+
+[Editable diagram source](docs/diagrams/architecture.mmd)
 
 | Layer | Implementation |
 | --- | --- |

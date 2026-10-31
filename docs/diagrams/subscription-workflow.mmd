@@ -1,0 +1,5 @@
+flowchart LR
+    D[Draft] --> Q[Quotation] --> C[Confirmed] --> A[Active] --> X[Closed]
+    A --> B[Recurring billing]
+    B --> I[Draft invoice] --> F[Confirmed invoice] --> P[Paid]
+    P --> R[Reports and customer portal]

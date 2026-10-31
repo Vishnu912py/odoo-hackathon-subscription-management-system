@@ -1,0 +1,10 @@
+flowchart TB
+    U[Admin / Staff / Customer] --> UI[React + TypeScript / Vite]
+    UI --> API[Express 5 + TypeScript / Node.js 24]
+    API --> AUTH[Sessions / CSRF / Roles / Ownership]
+    API --> DOMAIN[Catalog / Lifecycle / Billing / Reports]
+    AUTH --> DB[(PostgreSQL / Prisma 7)]
+    DOMAIN --> DB
+    CRON[Supabase pg_cron / pg_net] -->|Authenticated maintenance| API
+    DOMAIN --> MAIL[Durable outbox / Gmail API]
+    DOMAIN --> PDF[PDFKit / Embedded Noto fonts]
