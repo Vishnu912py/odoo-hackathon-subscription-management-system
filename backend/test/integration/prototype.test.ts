@@ -159,17 +159,21 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       const cust2SubId = randomUUID();
       const cust2InvId = randomUUID();
       const cust2PayId = randomUUID();
+      let pausedSubId: string | undefined;
+      let futureSubId: string | undefined;
+      let expiredSubId: string | undefined;
 
-      await prisma.plan.create({
-        data: {
-          id: planBId,
-          name: 'Beta Enterprise Plan',
-          price: '2000.00',
-          billingInterval: 'MONTHLY',
-          isActive: true,
-          availableFrom: new Date('2026-01-01'),
-        },
-      });
+      try {
+        await prisma.plan.create({
+          data: {
+            id: planBId,
+            name: 'Beta Enterprise Plan',
+            price: '2000.00',
+            billingInterval: 'MONTHLY',
+            isActive: true,
+            availableFrom: new Date('2026-01-01'),
+          },
+        });
 
       await prisma.user.create({
         data: {
@@ -343,6 +347,7 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
           isPaused: true,
         },
       });
+      pausedSubId = pausedSub.id;
 
       const futureSub = await prisma.subscription.create({
         data: {
@@ -358,6 +363,7 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
           isPaused: false,
         },
       });
+      futureSubId = futureSub.id;
 
       const expiredSub = await prisma.subscription.create({
         data: {
@@ -373,6 +379,7 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
           isPaused: false,
         },
       });
+      expiredSubId = expiredSub.id;
 
       const subClassReport = await admin.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(200);
       assert.equal(subClassReport.body.data.active_subscriptions, 2);
@@ -381,16 +388,21 @@ test('prototype v1 against real PostgreSQL in a newly created isolated schema', 
       // 8. Authorization and scope-tampering prevention (Requirement 9)
       await customer.agent.get('/api/v1/reports/overview?from=2026-10-01&to=2026-10-31').expect(403);
       await staff.agent.get('/api/v1/portal/overview?from=2026-10-01&to=2026-10-31').expect(403);
-      await customer.agent.get(`/api/v1/portal/overview?from=2026-10-01&to=2026-10-31&customer_id=${cust2ProfileId}`).expect(403);
-
-      // Cleanup D4 fixtures so subsequent test assertions on total invoice/subscription counts remain clean
-      await prisma.payment.deleteMany({ where: { id: cust2PayId } });
-      await prisma.invoice.deleteMany({ where: { id: cust2InvId } });
-      await prisma.subscription.deleteMany({ where: { id: { in: [cust2SubId, pausedSub.id, futureSub.id, expiredSub.id] } } });
-      await prisma.customer.deleteMany({ where: { id: cust2ProfileId } });
-      await prisma.session.deleteMany({ where: { user: { email: 'cust2@example.test' } } });
-      await prisma.user.deleteMany({ where: { id: cust2UserId } });
-      await prisma.plan.deleteMany({ where: { id: planBId } });
+      // Query validation rejects unexpected client-supplied customer_id on portal route with 400 Bad Request
+      await customer.agent.get(`/api/v1/portal/overview?from=2026-10-01&to=2026-10-31&customer_id=${cust2ProfileId}`).expect(400);
+      } finally {
+        // Guaranteed cleanup of D4 fixtures so subsequent test assertions on total counts remain pristine
+        await prisma.payment.deleteMany({ where: { id: cust2PayId } });
+        await prisma.invoice.deleteMany({ where: { id: cust2InvId } });
+        const subIds = [cust2SubId, pausedSubId, futureSubId, expiredSubId].filter(Boolean) as string[];
+        if (subIds.length > 0) {
+          await prisma.subscription.deleteMany({ where: { id: { in: subIds } } });
+        }
+        await prisma.customer.deleteMany({ where: { id: cust2ProfileId } });
+        await prisma.session.deleteMany({ where: { user: { email: 'cust2@example.test' } } });
+        await prisma.user.deleteMany({ where: { id: cust2UserId } });
+        await prisma.plan.deleteMany({ where: { id: planBId } });
+      }
     });
 
     await t.test('query allowlists, pagination, inclusive dates, and disabled accounts', async () => {
