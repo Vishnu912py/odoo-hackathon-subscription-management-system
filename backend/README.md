@@ -112,7 +112,7 @@ npm start
 
 ## Next implementation steps
 
-1. Zenfox: domain schema/migrations, session/idempotency/outbox persistence and fixtures (Completed).
+1. Zenfox: domain schema/migrations and fixtures are implemented, including tables for sessions, idempotency and outbox. Transactional persistence operations, reporting queries, concurrency/recovery tests and performance validation remain pending (D3-D5).
 2. Vishnu: session auth + CSRF + role/ownership enforcement; registration/login/reset; then one complete subscription path.
 3. Albin: shell/forms against contracts, then replace mocks when each backend handler exists.
 4. Add real-database integration tests for ownership, migrations, billing concurrency and payment replay before merging those features.

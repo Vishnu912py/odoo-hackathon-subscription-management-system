@@ -1,6 +1,6 @@
 # Architecture and shared contracts
 
-Status: an Express/TypeScript backend foundation exists in `backend/`; domain schema, migrations and business handlers are pending. Health checks and shared infrastructure are implemented; business contract operations return explicit 501 responses.
+Status: the Express/TypeScript backend foundation, domain schema, two migrations and synthetic seed fixtures are implemented in `backend/`. Health checks and shared infrastructure are implemented; business contract operations return explicit 501 responses. Transactional persistence operations and reporting queries remain pending.
 
 The agreed architecture baseline is **React + Vite + TypeScript** on the frontend, **Node.js 24 + Express 5 + TypeScript** on the backend, **PostgreSQL 16** for relational persistence, and **Prisma ORM 7.10.1 with Prisma Migrate**, as confirmed by Vishnu. Backend package location is `backend/`; schema and migrations live in `backend/prisma`. Pinned packages are specified in `backend/package.json` and `backend/package-lock.json`.
 

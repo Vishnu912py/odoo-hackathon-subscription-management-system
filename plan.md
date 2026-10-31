@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build the Brightloop subscription platform described in `docs/requirements.md`. Status: backend foundation in progress, with a static frontend wireframe; no full application milestone is complete. React/TypeScript, Express/TypeScript, PostgreSQL and Prisma ORM/Migrate form the baseline. Backend uses Node.js 24/Prisma 7 in `backend/`; domain schema/migrations are pending under `backend/prisma`. Hosting remains open. Use `docs/api-contracts.md` for shared interfaces and proposed MVP policies. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
+Build the Brightloop subscription platform described in `docs/requirements.md`. Status: backend and database foundations are implemented, alongside a React dashboard prototype. Domain schema, migrations and synthetic fixtures are in `backend/prisma`; business endpoints still return 501 and the first integrated journey is incomplete. React/TypeScript, Express/TypeScript, PostgreSQL and Prisma ORM/Migrate form the baseline. Backend uses Node.js 24/Prisma 7 in `backend/`. Hosting remains open. See the dated [implementation checklist](README.md#implementation-checklist--31-october-2026) for completed deliverables and local-only work. Use `docs/api-contracts.md` for shared interfaces and confirmed MVP defaults. Use dependency gates rather than invented deadlines; hackathon duration has not been supplied.
 
 ## Milestones
 

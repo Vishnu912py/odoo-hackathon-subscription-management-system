@@ -2,6 +2,56 @@
 
 Build a unified platform for Brightloop Software to manage products, recurring plans, quotations, subscriptions, invoices, discounts, payments, and reporting.
 
+## Implementation checklist — 31 October 2026
+
+Checked items are implemented deliverables, not proof that the full business journey works. PR #6 (backend foundation) and PR #4 (database foundation) are merged in `main` at `998c6a8`. Business/authentication endpoints still return `501 NOT_IMPLEMENTED`.
+
+### Vishnu (`Vishnu912py`) — backend and integration
+
+- [x] Confirm stack, shared API contracts, role matrix and MVP billing defaults.
+- [x] Implement Express/TypeScript foundation, environment validation, Prisma connection pool, health endpoints, error handling and HTTP/configuration tests (PR #6).
+- [x] Integrate PR #4 locally, configure a dedicated local PostgreSQL database, apply both migrations and verify real backend connectivity.
+- [ ] V1 remainder: select deployment target and configure deployment.
+- [ ] V2: implement authentication, password reset, staff creation, CSRF, server roles and customer ownership.
+- [ ] V3: implement catalog APIs and subscription lifecycle/business rules.
+- [ ] V4: implement billing orchestration, tax/discount calculations, invoice actions and payment rules.
+- [ ] V5: expose reports, complete the real end-to-end journey, validate performance and prepare release/demo.
+
+Local frontend integration code also exists in the working tree: API client/types, development proxy, connection indicators, sign-in wiring and read-only report/list views. It is **uncommitted** and is not counted as merged or verified end-to-end functionality.
+
+### Zenfox (`Zenfox-690`) — database and persistence
+
+- [x] D1: deliver the domain model, relationships, constraints, baseline indexes and synthetic demo fixtures.
+- [x] D2: implement the shared Prisma 7 schema and two PostgreSQL migrations under `backend/prisma` (PR #4).
+- [x] Add seed tooling, static schema verification and live database constraint tests; configure PostgreSQL 16 CI.
+- [ ] D3: implement transactional invoice creation, discount usage, payment allocation and recoverable billing progress, with retry/concurrency tests.
+- [ ] D4: implement filterable, customer-scoped reporting queries and reconcile their totals against fixtures.
+- [ ] D5: seed thousands of subscriptions, measure query performance and tune indexes; support page-level performance verification.
+
+Session, idempotency, billing-run and outbox tables exist; their runtime workflows are still pending.
+
+### Albin (`albinsavi123-lang`) — frontend
+
+- [x] Scaffold the React/Vite/TypeScript application.
+- [x] Build the RevOps Shield dashboard prototype: navigation shell/mobile menu, summary cards, illustrative chart, invoice table and recovery overview (commit `50524a8`).
+- [ ] F1 remainder: complete role-aware navigation, shared forms/states and signup/login/reset flows against working authentication.
+- [ ] F2: implement admin catalog, variants, plans, taxes, discounts, staff and quotation-template screens.
+- [ ] F3: implement subscription detail/forms, lifecycle actions and the ownership-scoped customer portal.
+- [ ] F4: implement invoice detail/print and payment-entry workflows with authoritative balances.
+- [ ] F5: integrate live dashboard filters/data and verify pagination and page performance.
+
+The dashboard prototype uses illustrative data; navigation labels and preview controls do not establish completed business screens.
+
+### Verification recorded
+
+- [x] Local backend `npm run check`: 15 tests passed, Prisma validation/generation and TypeScript compilation succeeded.
+- [x] Local PostgreSQL 18: both migrations applied, migration status up to date, synthetic seed loaded, and `npm run test:db` passed 13 checks.
+- [x] Running backend `/health/ready`: HTTP 200 with `database: connected`.
+- [x] PR #4 PostgreSQL 16 CI: backend checks, migrations, two seed runs and live constraint suite succeeded.
+- [ ] Real authenticated business journey, concurrency/recovery acceptance checks and under-two-second page performance verified.
+
+These results cover foundation checks, not completed authentication, billing or reporting. See [team responsibilities](docs/team-responsibilities.md) and the [acceptance checklist](plan.md).
+
 ## Technology stack
 
 The confirmed technology stack is:
