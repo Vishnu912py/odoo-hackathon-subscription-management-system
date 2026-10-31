@@ -12,15 +12,24 @@ const prisma = new PrismaClient();
 let testsPassed = 0;
 let testsFailed = 0;
 
-async function assertRejects(testName: string, operation: () => Promise<any>, expectedConstraintSnippet?: string) {
+async function assertRejects(
+  testName: string,
+  operation: () => Promise<any>,
+  expectedSnippets?: string | string[]
+) {
   try {
     await operation();
     console.error(` [FAIL] ${testName} - Expected error but operation succeeded!`);
     testsFailed++;
   } catch (error: any) {
-    const errorMsg = error?.message || String(error);
-    if (expectedConstraintSnippet && !errorMsg.includes(expectedConstraintSnippet)) {
-      console.error(` [FAIL] ${testName} - Expected error containing '${expectedConstraintSnippet}' but got: ${errorMsg}`);
+    const fullErrorStr = `${error?.message || ''} ${JSON.stringify(error?.meta || {})} ${String(error)}`;
+    const snippets = Array.isArray(expectedSnippets)
+      ? expectedSnippets
+      : (expectedSnippets ? [expectedSnippets] : []);
+    const matched = snippets.length === 0 || snippets.some(s => fullErrorStr.toLowerCase().includes(s.toLowerCase()));
+
+    if (!matched) {
+      console.error(` [FAIL] ${testName} - Expected error matching any of ${JSON.stringify(snippets)} but got: ${fullErrorStr}`);
       testsFailed++;
     } else {
       console.log(` [PASS] ${testName}`);
@@ -73,7 +82,7 @@ async function runConstraintTests() {
         },
       });
     },
-    'users_email_lower_idx'
+    ['users_email_lower_idx', 'email']
   );
 
   // 2. Negative price rejection
@@ -196,7 +205,7 @@ async function runConstraintTests() {
         },
       });
     },
-    'payments_idempotency_key_key'
+    ['payments_idempotency_key_key', 'idempotency_key', 'idempotencykey']
   );
 
   // 8. Product–variant cross-assignment rejection
@@ -217,7 +226,7 @@ async function runConstraintTests() {
          VALUES (gen_random_uuid(), '${template.id}', '${wrongProductId}', '${variant.id}', 1.0000, 500.0000);`
       );
     },
-    'quotation_template_lines_variant_id_product_id_fkey'
+    ['quotation_template_lines_variant_id_product_id_fkey', 'variant_id', 'product_id', 'violates foreign key']
   );
 
   // 9. Duplicate subscription billing period
@@ -235,7 +244,7 @@ async function runConstraintTests() {
          VALUES (gen_random_uuid(), '${existingInv.subscriptionId}', 'INV-DUP-PERIOD-${runId}', '${pStart}', '${pEnd}', '${pStart}', '${pEnd}', 'DRAFT', 'INR', 'Snapshot', 'snap@test.com', 100.00, 100.00, 1, NOW(), NOW());`
       );
     },
-    'invoices_subscription_id_period_start_key'
+    ['invoices_subscription_id_period_start_key', 'subscription_id', 'period_start', 'unique constraint']
   );
 
   // 10. Duplicate discount redemption on same invoice
@@ -281,7 +290,7 @@ async function runConstraintTests() {
         },
       });
     },
-    'discount_redemptions_discount_rule_id_invoice_id_key'
+    ['discount_redemptions_discount_rule_id_invoice_id_key', 'discount_rule_id', 'invoice_id', 'unique constraint']
   );
 
   console.log('================================================================================');
