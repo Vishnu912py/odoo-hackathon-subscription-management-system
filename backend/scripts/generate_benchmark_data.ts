@@ -27,11 +27,22 @@ export class SeededRandom {
   }
 }
 
+const ENTITY_PREFIX_HEX: Record<string, string> = {
+  admin: 'a0000001',
+  staff: 'a0000002',
+  user:  'b0000000',
+  cust:  'c0000000',
+  plan:  'd0000000',
+  sub:   'e0000000',
+  inv:   'f0000000',
+  pay:   'f1000000',
+};
+
 export function formatUuid(prefix: string, index: number): string {
-  // Generates valid RFC4122 v4-shaped deterministic UUID: xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx
-  const hex = index.toString(16).padStart(12, '0');
-  const p = prefix.padEnd(8, '0').slice(0, 8);
-  return `${p}-0000-4000-8000-${hex}`;
+  // Generates valid RFC4122 v4-shaped deterministic UUID: xxxxxxxx-0000-4000-8000-xxxxxxxxxxxx
+  const hexPrefix = ENTITY_PREFIX_HEX[prefix] || '00000000';
+  const hexIndex = index.toString(16).padStart(12, '0');
+  return `${hexPrefix}-0000-4000-8000-${hexIndex}`;
 }
 
 export interface DatasetCounts {

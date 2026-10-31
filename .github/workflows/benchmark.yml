@@ -48,10 +48,14 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm run prisma:generate
 
       - name: Generate Large-Scale Benchmark Dataset (10,000 Subs, 100,000 Invoices)
-        run: npm run benchmark:generate
+        run: |
+          set -o pipefail
+          npm run benchmark:generate 2>&1 | tee generate.log
 
       - name: Execute Reporting Persistence Benchmark Suite
         run: |
@@ -61,6 +65,12 @@ jobs:
       - name: Publish Benchmark Summary
         if: always()
         run: |
+          if [ -f generate.log ]; then
+            echo "### Benchmark Dataset Generation" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            cat generate.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
           if [ -f benchmark.log ]; then
             echo "### PostgreSQL 16 Benchmark Results (10,000 Subs, 100,000 Invoices)" >> $GITHUB_STEP_SUMMARY
             echo '```text' >> $GITHUB_STEP_SUMMARY
