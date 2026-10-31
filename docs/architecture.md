@@ -1,8 +1,8 @@
 # Architecture and shared contracts
 
-Status: proposed guidance, not an existing system. No application code or API exists yet.
+Status: an Express/TypeScript backend foundation exists in `backend/`; domain schema, migrations and business handlers are pending. Health checks and shared infrastructure are implemented; business contract operations return explicit 501 responses.
 
-The agreed architecture baseline is **React + Vite + TypeScript** on the frontend, **Node.js + Express** on the backend, **PostgreSQL** for relational persistence, and **Prisma** (with Prisma Migrate) as the proposed ORM.
+The agreed architecture baseline is **React + Vite + TypeScript** on the frontend, **Node.js + Express + TypeScript** on the backend, **PostgreSQL** for relational persistence, and **Prisma ORM with Prisma Migrate**, now confirmed by Vishnu. Backend package location is `backend/`; schema and migrations live in `backend/prisma`. Node.js 24 and Prisma 7 are the backend toolchain; exact packages are pinned in backend/package.json and package-lock.json.
 
 The [ER diagram and schema handoff](er-diagram.md) develops the proposed entities below into a refined PostgreSQL schema and data integrity specification.
 
@@ -10,7 +10,7 @@ The newer [API contracts](api-contracts.md) define the HTTP/JSON interface basel
 
 ## Decisions register
 
-The following 8 business and architectural decisions remain explicitly unresolved until team lead Vishnu912py confirms them:
+Vishnu confirmed the API guide's MVP billing defaults in the [PR #4 review](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/4#pullrequestreview-5721556703). That confirmation supersedes the unresolved labels below; Zenfox should reconcile the detailed decision register when aligning the schema. The ORM and repository location are also confirmed:
 
 | Decision | Status | Owner | Scope / Impact |
 | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ The following 8 business and architectural decisions remain explicitly unresolve
 | 5. Pause/resume and billing-date arithmetic | Unresolved | Vishnu + Zenfox | Confirm whether resuming a paused subscription shifts the recurrence anchor or preserves the original anchor while skipping unbilled periods. |
 | 6. Partial and overpayment handling | Unresolved | Vishnu + Zenfox | Confirm whether overpayment is strictly rejected at the database/API boundary or credited toward future invoices. |
 | 7. Currency, timezone and rounding | Unresolved | Vishnu + Zenfox | Confirm baseline currency (INR), business timezone (Asia/Kolkata), and exact rounding rule (half-up to 2 decimals) before applying migrations. |
-| 8. Prisma confirmation and database package location | Unresolved | Vishnu + Zenfox | Explicitly confirm Prisma as the production ORM/migration tool, and confirm the project repository layout (e.g. root `prisma/` vs monorepo `packages/database/`). |
+| 8. Prisma confirmation and database package location | Confirmed by Vishnu | Vishnu + Zenfox | Prisma ORM/Migrate 7; backend package in `backend/`, schema/migrations in `backend/prisma`, generated client in ignored `backend/src/generated/prisma`. |
 
 ## Proposed entities
 

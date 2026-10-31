@@ -1,0 +1,14 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Domain models and SQL migrations are owned by Zenfox-690.
+// Keep this single schema as the shared source; do not add placeholder tables.
+// See ../../docs/er-diagram.md and ../../docs/api-contracts.md before adding models.

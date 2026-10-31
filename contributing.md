@@ -2,7 +2,7 @@
 
 ## Getting started
 
-Read `docs/team-responsibilities.md` and `docs/architecture.md` first. Stack-specific commands will be added after scaffolding; none are currently available.
+Read `docs/team-responsibilities.md`, `docs/architecture.md` and `backend/README.md` first. Backend install/start/check commands now exist. Run `npm run check` from `backend/` for backend changes; database integration checks must accompany future persistence features. Schema and migrations belong in `backend/prisma`.
 
 1. Create a focused branch for each issue or feature.
 2. Keep pull requests small and easy to review.

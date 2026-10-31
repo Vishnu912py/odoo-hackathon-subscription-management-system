@@ -17,7 +17,7 @@ Done when the real backend supports the full journey, rejects unauthorized opera
 ## Zenfox-690 - database and data reliability
 
 - D1: Design entities, relationships, constraints, indexes, migrations and demo fixtures with Vishnu, covering users through payments (R01-R10).
-- D2: Implement schema/model definitions and repeatable migrations. If Odoo is selected, prefer its ORM/security conventions; avoid a competing schema outside the framework.
+- D2: Implement Prisma schema/model definitions and reviewed SQL migrations in `backend/prisma`. Prisma ORM/Migrate is now confirmed; use the pinned backend toolchain and keep one shared schema.
 - D3: Implement persistence operations for unique subscription/period billing, atomic invoice creation, safe discount usage, payment allocation and recoverable scheduler progress (R07-R10).
 - D4: Implement filterable report queries/indexes and reconcile totals against fixtures (R11).
 - D5: Seed thousands of subscriptions, measure query performance and help Vishnu meet page-level targets (R12).
@@ -32,7 +32,7 @@ Done when a fresh database initializes reproducibly, constraints prevent duplica
 - F4: Build invoices, printable views, staff payment-entry workflow and paid/outstanding/overdue views (R07-R10).
 - F5: Build filterable dashboard; integrate real data and verify page response times with realistic pagination (R11-R12).
 
-Done when all three roles complete permitted workflows against the real backend, errors are clear and the portal cannot reveal another customer's records. Prototype with agreed fixtures until backend operations exist. If Odoo is selected, use its views/templates rather than assuming a separate React frontend.
+Done when all three roles complete permitted workflows against the real backend, errors are clear and the portal cannot reveal another customer's records. Use React/TypeScript and the shared API contract. Prototype with agreed fixtures until backend operations exist; the current server foundation's business routes return explicit 501 responses.
 
 ## Handoffs and review
 
