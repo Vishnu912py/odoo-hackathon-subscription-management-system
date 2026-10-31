@@ -1,0 +1,195 @@
+/* RevOps Shield Subscriptions Feature Styles */
+
+.subscriptions-section {
+  margin-top: 20px;
+}
+
+.subscription-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+}
+
+.subscription-badge.draft {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+}
+
+.subscription-badge.quotation {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.subscription-badge.confirmed {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.subscription-badge.active {
+  background: #e3f5eb;
+  color: #12633f;
+  border: 1px solid #b5e4c9;
+}
+
+.subscription-badge.closed {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.subscription-badge.paused {
+  background: #ffedd5;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+.subscription-details-card {
+  padding: 24px;
+  background: white;
+  border: 1px solid #d4dfd7;
+  border-radius: 10px;
+  margin-bottom: 24px;
+}
+
+.subscription-details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.subscription-details-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #153d2d;
+}
+
+.subscription-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  background: #f7faf8;
+  border: 1px solid #d4dfd7;
+  border-radius: 8px;
+  align-items: center;
+}
+
+.subscription-actions-bar .action-heading {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: #205c42;
+  margin-right: 8px;
+}
+
+.capabilities-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.capabilities-strip span.allowed {
+  color: #065f46;
+  font-weight: 600;
+}
+
+.capabilities-strip span.disallowed {
+  color: #9ca3af;
+}
+
+.lifecycle-dialog {
+  margin: 16px 0;
+  padding: 18px;
+  background: #f4f8f5;
+  border: 1px solid #b8c8be;
+  border-radius: 8px;
+}
+
+.lifecycle-dialog h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: #153d2d;
+}
+
+.lifecycle-dialog p {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  color: #4b5563;
+}
+
+.lifecycle-dialog-form {
+  display: grid;
+  gap: 12px;
+}
+
+.subscription-create-modal {
+  padding: 24px;
+  background: white;
+  border: 1px solid #c2d6c9;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 14px rgba(21, 61, 45, 0.08);
+}
+
+.subscription-create-modal h3 {
+  margin-top: 0;
+  margin-bottom: 4px;
+  color: #153d2d;
+}
+
+.policy-snapshot-box {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  background: #f8faf9;
+  border: 1px solid #e1ebe4;
+  border-radius: 6px;
+  margin-top: 12px;
+  font-size: 0.85rem;
+}
+
+.financial-summary-box {
+  display: flex;
+  justify-content: flex-end;
+  gap: 24px;
+  padding: 16px;
+  background: #f7faf8;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.financial-summary-item {
+  text-align: right;
+}
+
+.financial-summary-item span {
+  display: block;
+  font-size: 0.8rem;
+  color: #586a60;
+  text-transform: uppercase;
+}
+
+.financial-summary-item strong {
+  font-size: 1.15rem;
+  color: #153d2d;
+}
+

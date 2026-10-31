@@ -1,4 +1,6 @@
-export type LivePage = 'Overview' | 'Subscriptions' | 'Invoices' | 'Payments' | 'Staff'
+import { isTabAllowedForRole, type NavTab } from '../catalog/navigation.ts'
+
+export type LivePage = NavTab
 
 export interface NavigationItem {
   id: LivePage
@@ -9,14 +11,12 @@ export interface NavigationItem {
 
 /**
  * Access control for RevOps Shield navigation pages:
- * - Admin: Overview, Subscriptions, Invoices, Payments, Staff
+ * - Admin: Overview, Subscriptions, Invoices, Payments, catalog configuration, Staff
  * - Staff: Overview, Subscriptions, Invoices, Payments (Staff is admin-only)
  * - Customer: Overview, Subscriptions, Invoices (Payments and Staff are forbidden per OpenAPI contract)
  */
 export function isPagePermittedForRole(page: LivePage, role: 'admin' | 'staff' | 'customer'): boolean {
-  if (page === 'Staff') return role === 'admin'
-  if (page === 'Payments') return role === 'admin' || role === 'staff'
-  return true
+  return isTabAllowedForRole(page, role)
 }
 
 export function getNavigationItems(role: 'admin' | 'staff' | 'customer'): NavigationItem[] {
@@ -29,6 +29,13 @@ export function getNavigationItems(role: 'admin' | 'staff' | 'customer'): Naviga
     items.push({ id: 'Payments', label: 'Payments', icon: '⇄', desc: 'Payment receipts & reconciliation' })
   }
   if (role === 'admin') {
+    items.push(
+      { id: 'Products', label: 'Products', icon: '▤', desc: 'Products configuration' },
+      { id: 'Plans', label: 'Plans', icon: '▤', desc: 'Plans configuration' },
+      { id: 'Taxes', label: 'Taxes', icon: '▤', desc: 'Taxes configuration' },
+      { id: 'Discounts', label: 'Discounts', icon: '▤', desc: 'Discounts configuration' },
+      { id: 'Templates', label: 'Templates', icon: '▤', desc: 'Templates configuration' },
+    )
     items.push({ id: 'Staff', label: 'Staff Management', icon: '👥', desc: 'Manage staff accounts & invitations' })
   }
   return items

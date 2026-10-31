@@ -2,6 +2,18 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { validatePassword, isValidEmail } from '../src/features/live/password-policy.ts'
 import { isPagePermittedForRole, getNavigationItems } from '../src/features/live/navigation-policy.ts'
+import { getAllowedTabsForRole, CATALOG_ADMIN_TABS } from '../src/features/catalog/navigation.ts'
+
+test('merged sidebar and catalog guards agree for every role', () => {
+  for (const role of ['admin', 'staff', 'customer']) {
+    const visible = getNavigationItems(role).map(item => item.id)
+    assert.deepEqual(visible, [...getAllowedTabsForRole(role)])
+    for (const tab of CATALOG_ADMIN_TABS) {
+      assert.equal(visible.includes(tab), role === 'admin')
+      assert.equal(isPagePermittedForRole(tab, role), role === 'admin')
+    }
+  }
+})
 
 test('password policy enforces > 8 characters, uppercase, lowercase, and special characters', () => {
   // Length check: <= 8 characters must fail
