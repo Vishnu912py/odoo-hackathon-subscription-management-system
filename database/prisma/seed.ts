@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, BillingInterval, DiscountType, DiscountScope } from '@prisma/client';
+import { PrismaClient, UserRole, BillingInterval, DiscountType, DiscountScope, SubscriptionStatus, InvoiceStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -22,6 +22,12 @@ export const FIXTURES = {
   TEMPLATE_LINE_CONNECTOR_ID: '00000000-0000-4000-8000-000000000062',
   DISCOUNT_FIXED_ID: '00000000-0000-4000-8000-000000000070',
   DISCOUNT_PERCENT_ID: '00000000-0000-4000-8000-000000000071',
+  SUBSCRIPTION_ID: '00000000-0000-4000-8000-000000000100',
+  SUBSCRIPTION_LINE_ID: '00000000-0000-4000-8000-000000000101',
+  INVOICE_ID: '00000000-0000-4000-8000-000000000200',
+  INVOICE_LINE_ID: '00000000-0000-4000-8000-000000000201',
+  INVOICE_LINE_TAX_ID: '00000000-0000-4000-8000-000000000202',
+  PAYMENT_ID: '00000000-0000-4000-8000-000000000700',
 };
 
 async function main() {
@@ -33,7 +39,6 @@ async function main() {
   console.log('Seeding Subscription Management System baseline database with idempotent fixtures...');
 
   // 1. Users (Admin, Staff, Customer)
-  // Password hash for 'P@ssword123!' (validates: >8 chars, uppercase, lowercase, special char, number)
   const defaultPasswordHash = '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQmG6W56SuT86p2oA6nxe';
 
   const adminUser = await prisma.user.upsert({
@@ -233,7 +238,6 @@ async function main() {
   });
 
   // 6. Plans & Bundle Pricing (Confirming rule: plans.price == sum(default included lines))
-  // Plan price is 1000.00; default quantity of Core product is 2.0000 @ 500.0000 = 1000.0000.
   const monthlyPlan = await prisma.plan.upsert({
     where: { id: FIXTURES.PLAN_MONTHLY_ID },
     update: {
@@ -265,7 +269,6 @@ async function main() {
     },
   });
 
-  // Included Product in Plan: 2 seats @ 500 = 1000.00 (matches plan.price exactly)
   await prisma.planProduct.upsert({
     where: { planId_productId: { planId: monthlyPlan.id, productId: productCore.id } },
     update: {
@@ -283,7 +286,6 @@ async function main() {
     },
   });
 
-  // Add-on Product in Plan: optional add-on (excluded from bundle sum)
   await prisma.planProduct.upsert({
     where: { planId_productId: { planId: monthlyPlan.id, productId: productConnector.id } },
     update: {
@@ -355,7 +357,7 @@ async function main() {
     },
   });
 
-  // 8. Discount Rules (both fixed and percentage, respecting CHECK constraint: value <= 100 for percentage)
+  // 8. Discount Rules
   const fixedDiscount = await prisma.discountRule.upsert({
     where: { id: FIXTURES.DISCOUNT_FIXED_ID },
     update: {
@@ -386,7 +388,7 @@ async function main() {
     update: {
       name: 'Connector 10% Discount',
       discountType: DiscountType.PERCENTAGE,
-      value: 10.0000, // Valid percentage <= 100
+      value: 10.0000,
       scope: DiscountScope.PRODUCT,
       usageLimit: 100,
       isActive: true,
@@ -408,15 +410,176 @@ async function main() {
     create: { discountRuleId: percentageDiscount.id, productId: productConnector.id },
   });
 
-  console.log('Seed completed successfully (idempotent run verified):');
+  // 9. Integration Subscription & Invoice Fixtures (matching docs/api/examples/invoice-partial.json)
+  const subscription = await prisma.subscription.upsert({
+    where: { id: FIXTURES.SUBSCRIPTION_ID },
+    update: {
+      number: 'SUB-0001',
+      customerId: customer.id,
+      planId: monthlyPlan.id,
+      paymentTermId: paymentTermNet15.id,
+      status: SubscriptionStatus.ACTIVE,
+      currency: 'INR',
+      billingInterval: BillingInterval.MONTHLY,
+      startDate: new Date('2026-10-01'),
+      expiryDate: new Date('2027-10-01'),
+      nextBillingDate: new Date('2026-11-01'),
+    },
+    create: {
+      id: FIXTURES.SUBSCRIPTION_ID,
+      number: 'SUB-0001',
+      customerId: customer.id,
+      planId: monthlyPlan.id,
+      paymentTermId: paymentTermNet15.id,
+      status: SubscriptionStatus.ACTIVE,
+      currency: 'INR',
+      billingInterval: BillingInterval.MONTHLY,
+      startDate: new Date('2026-10-01'),
+      expiryDate: new Date('2027-10-01'),
+      nextBillingDate: new Date('2026-11-01'),
+    },
+  });
+
+  const subLine = await prisma.subscriptionLine.upsert({
+    where: { id: FIXTURES.SUBSCRIPTION_LINE_ID },
+    update: {
+      subscriptionId: subscription.id,
+      productId: productCore.id,
+      description: 'Brightloop Cloud ERP Standard',
+      quantity: 2.0000,
+      unitPrice: 500.0000,
+    },
+    create: {
+      id: FIXTURES.SUBSCRIPTION_LINE_ID,
+      subscriptionId: subscription.id,
+      productId: productCore.id,
+      description: 'Brightloop Cloud ERP Standard',
+      quantity: 2.0000,
+      unitPrice: 500.0000,
+    },
+  });
+
+  const invoice = await prisma.invoice.upsert({
+    where: { id: FIXTURES.INVOICE_ID },
+    update: {
+      number: 'INV-0001',
+      subscriptionId: subscription.id,
+      periodStart: new Date('2026-10-01'),
+      periodEnd: new Date('2026-11-01'),
+      issueDate: new Date('2026-10-01'),
+      dueDate: new Date('2026-10-16'),
+      status: InvoiceStatus.CONFIRMED,
+      currency: 'INR',
+      customerNameSnapshot: customer.name,
+      billingEmailSnapshot: customer.billingEmail,
+      billingAddressSnapshot: customer.billingAddress,
+      subtotal: 1000.00,
+      discountTotal: 0.00,
+      taxTotal: 180.00,
+      total: 1180.00,
+      amountPaid: 500.00,
+    },
+    create: {
+      id: FIXTURES.INVOICE_ID,
+      number: 'INV-0001',
+      subscriptionId: subscription.id,
+      periodStart: new Date('2026-10-01'),
+      periodEnd: new Date('2026-11-01'),
+      issueDate: new Date('2026-10-01'),
+      dueDate: new Date('2026-10-16'),
+      status: InvoiceStatus.CONFIRMED,
+      currency: 'INR',
+      customerNameSnapshot: customer.name,
+      billingEmailSnapshot: customer.billingEmail,
+      billingAddressSnapshot: customer.billingAddress,
+      subtotal: 1000.00,
+      discountTotal: 0.00,
+      taxTotal: 180.00,
+      total: 1180.00,
+      amountPaid: 500.00,
+    },
+  });
+
+  const invLine = await prisma.invoiceLine.upsert({
+    where: { id: FIXTURES.INVOICE_LINE_ID },
+    update: {
+      invoiceId: invoice.id,
+      subscriptionLineId: subLine.id,
+      descriptionSnapshot: subLine.description,
+      quantity: 2.0000,
+      unitPrice: 500.0000,
+      subtotal: 1000.00,
+      discountAmount: 0.00,
+      taxAmount: 180.00,
+      total: 1180.00,
+    },
+    create: {
+      id: FIXTURES.INVOICE_LINE_ID,
+      invoiceId: invoice.id,
+      subscriptionLineId: subLine.id,
+      descriptionSnapshot: subLine.description,
+      quantity: 2.0000,
+      unitPrice: 500.0000,
+      subtotal: 1000.00,
+      discountAmount: 0.00,
+      taxAmount: 180.00,
+      total: 1180.00,
+    },
+  });
+
+  await prisma.invoiceLineTax.upsert({
+    where: { id: FIXTURES.INVOICE_LINE_TAX_ID },
+    update: {
+      invoiceLineId: invLine.id,
+      taxId: taxGst18.id,
+      nameSnapshot: taxGst18.name,
+      ratePercentSnapshot: taxGst18.ratePercent,
+      taxableBase: 1000.00,
+      amount: 180.00,
+    },
+    create: {
+      id: FIXTURES.INVOICE_LINE_TAX_ID,
+      invoiceLineId: invLine.id,
+      taxId: taxGst18.id,
+      nameSnapshot: taxGst18.name,
+      ratePercentSnapshot: taxGst18.ratePercent,
+      taxableBase: 1000.00,
+      amount: 180.00,
+    },
+  });
+
+  await prisma.payment.upsert({
+    where: { id: FIXTURES.PAYMENT_ID },
+    update: {
+      invoiceId: invoice.id,
+      recordedById: staffUser.id,
+      idempotencyKey: '00000000-0000-4000-8000-000000000700',
+      method: 'bank_transfer',
+      amount: 500.00,
+      paymentDate: new Date('2026-10-15'),
+      note: 'Initial partial payment',
+    },
+    create: {
+      id: FIXTURES.PAYMENT_ID,
+      invoiceId: invoice.id,
+      recordedById: staffUser.id,
+      idempotencyKey: '00000000-0000-4000-8000-000000000700',
+      method: 'bank_transfer',
+      amount: 500.00,
+      paymentDate: new Date('2026-10-15'),
+      note: 'Initial partial payment',
+    },
+  });
+
+  console.log('Seed completed successfully (100% idempotent run verified):');
   console.log(`- Admin: ${adminUser.email} [${adminUser.id}]`);
   console.log(`- Staff: ${staffUser.email} [${staffUser.id}]`);
   console.log(`- Customer: ${customer.name} [${customer.id}]`);
   console.log(`- Product Core: ${productCore.name} [${productCore.id}] (₹${productCore.salesPrice})`);
   console.log(`- Product Variant: ${variantOdoo.name} [${variantOdoo.id}] (+₹${variantOdoo.priceAdjustment})`);
   console.log(`- Plan: ${monthlyPlan.name} [${monthlyPlan.id}] (₹${monthlyPlan.price})`);
-  console.log(`- Payment Terms: ${paymentTermNet15.name} [${paymentTermNet15.id}]`);
-  console.log(`- Discounts: Fixed ₹${fixedDiscount.value}, Percentage ${percentageDiscount.value}%`);
+  console.log(`- Subscription: ${subscription.number} [${subscription.id}]`);
+  console.log(`- Invoice: ${invoice.number} [${invoice.id}] (Total: ₹${invoice.total}, Balance Due: ₹680.00)`);
 }
 
 main()
