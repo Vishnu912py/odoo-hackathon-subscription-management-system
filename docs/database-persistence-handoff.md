@@ -39,6 +39,7 @@ export async function createSubscriptionInvoice(
 2. **Idempotent Identity:** Enforces `UNIQUE (subscription_id, period_start)`. Concurrent duplicate billing attempts return the existing invoice with `isReused: true`.
 3. **Atomic Snapshots:** Captures immutable point-in-time snapshots of `customer_name_snapshot`, `billing_email_snapshot`, `billing_address_snapshot`, `rate_percent_snapshot`, `taxable_base`, and discount values.
 4. **Exact Decimal Arithmetic:** Per-line subtotals, pre-tax discount deductions, exclusive additive taxes, and final totals calculated using exact decimal arithmetic with half-up 2-decimal rounding (`ROUND_HALF_UP`).
+5. **Monotonic Schedule Advancement:** When `advanceSchedule: true` is requested (in both fresh creation and reused invoice paths), advances `subscription.nextBillingDate` conditionally and atomically (`nextBillingDate IS NULL OR nextBillingDate < nextDate`), guaranteeing schedules never rewind backwards when processing stale or replayed periods.
 
 ---
 
@@ -106,7 +107,7 @@ export async function executeBillingRun(
 ```
 
 #### Concurrency & Recovery Guarantees:
-1. **Session-Level Advisory Lock on Dedicated Connection:** Acquired on a dedicated PostgreSQL connection (`pg.Client`) via `SELECT pg_try_advisory_lock(hashtextextended('billing_run:' || runId, 0))`. Held continuously for the entire duration of the batch, preventing any second worker from executing concurrently.
+1. **Session-Level Advisory Lock on Dedicated Connection:** Acquired on a dedicated PostgreSQL connection (`pg.Client`) via `SELECT pg_try_advisory_lock(hashtextextended('billing_run:' || runId, 0))`. Held continuously for the entire duration of the batch, preventing any second worker from executing concurrently. Requires an explicit connection string (`options.connectionString`, `DIRECT_URL`, or `DATABASE_URL`) without silent fallback to test credentials.
 2. **Protection Against Concurrent Resume:** Even when `allowResume: true` is passed, a competing worker cannot bypass an active worker's session lock; it is immediately rejected with `409 RUN_IN_PROGRESS`.
 3. **Automatic Crash Recovery via Socket Closure:** When a worker process crashes, is killed, or drops its connection, PostgreSQL automatically releases all session-level advisory locks tied to that connection. A subsequent worker can immediately acquire the lock and resume the run.
 4. **Abandoned vs Active Discrimination:**
@@ -115,7 +116,7 @@ export async function executeBillingRun(
 5. **Transactional Subscription Processing:** Each due subscription is processed within its own interactive database transaction:
    - Acquires `pg_try_advisory_xact_lock(hashtextextended('sub_run:' || sub.id || ':' || periodStartStr, 0))`.
    - Creates invoice via `createSubscriptionInvoice(tx, ...)`.
-   - Advances `subscription.nextBillingDate = periodEnd`.
+   - Advances `subscription.nextBillingDate` monotonically without duplicating the schedule update already handled in the invoice path.
    - Incrementally and durably updates `BillingRun` counters (`subscriptionsProcessed`, `invoicesGenerated`, `invoicesReused`, `totalAmountBilled`) within that exact same transaction.
 6. **Crash Recovery Without Double-Counting:**
    - If a crash occurs at subscription $N$, subscriptions $1 \dots N-1$ have their invoices, schedule advancements, and billing-run progress committed together.
@@ -179,4 +180,4 @@ To maintain single-source-of-truth persistence without altering the approved HTT
 - **TypeScript Compilation:** `npm run typecheck` passed with 0 errors.
 - **Backend Check Suite:** `npm run check` passed 15/15 unit and integration tests.
 - **Static Schema & DDL Integrity:** `python scripts/verify_schema_integrity.py` passed (32 models, 13 checks, 6 indexes).
-- **PostgreSQL 16 Integration Suite:** All 36 tests in `test_db_constraints.ts` pass against live PostgreSQL 16 Alpine in CI (including historical discount activity intervals, concurrent usage limit locking, payment idempotency & allocation races, recoverable billing runs with partial-batch resume, and calendar recurrence date arithmetic).
+- **PostgreSQL 16 Integration Suite:** All 37 tests in `test_db_constraints.ts` pass against live PostgreSQL 16 Alpine in CI (including monotonic schedule advancement without rewinds on stale/reused periods, historical discount activity intervals, concurrent usage limit locking, payment idempotency & allocation races, recoverable billing runs with partial-batch resume, and calendar recurrence date arithmetic).

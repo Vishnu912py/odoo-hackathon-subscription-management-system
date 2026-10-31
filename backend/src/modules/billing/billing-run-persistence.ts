@@ -98,8 +98,14 @@ export async function executeBillingRun(
     const connectionString =
       options?.connectionString ||
       process.env.DIRECT_URL ||
-      process.env.DATABASE_URL ||
-      'postgresql://brightloop:brightloop_test_password@localhost:5432/subscription_management_test?schema=public';
+      process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error(
+        'Database connection string is required for billing run lock acquisition (options.connectionString, DIRECT_URL, or DATABASE_URL).'
+      );
+    }
+
     lockClient = new pg.Client({ connectionString });
     await lockClient.connect();
     ownsLockClient = true;
@@ -218,8 +224,14 @@ export async function executeBillingRun(
 
           // Atomically record durable progress counters within the same transaction!
           if (invoiceResult.isSkippedPaused) {
-            await tx.subscription.update({
-              where: { id: sub.id },
+            await tx.subscription.updateMany({
+              where: {
+                id: sub.id,
+                OR: [
+                  { nextBillingDate: null },
+                  { nextBillingDate: { lt: periodEnd } },
+                ],
+              },
               data: { nextBillingDate: periodEnd },
             });
 
@@ -231,11 +243,6 @@ export async function executeBillingRun(
             });
             batchProcessed++;
           } else if (invoiceResult.isReused) {
-            await tx.subscription.update({
-              where: { id: sub.id },
-              data: { nextBillingDate: periodEnd },
-            });
-
             await tx.billingRun.update({
               where: { id: runId },
               data: {

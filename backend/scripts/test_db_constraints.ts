@@ -943,7 +943,7 @@ async function runConstraintTests() {
       data: { nextBillingDate: new Date('2027-06-01') },
     });
 
-    const runResult = await executeBillingRun(prisma, testRun.id);
+    const runResult = await executeBillingRun(prisma, testRun.id, { connectionString });
 
     const updatedSub = await prisma.subscription.findUniqueOrThrow({ where: { id: testSubscription.id } });
     const nextDateStr = updatedSub.nextBillingDate?.toISOString().split('T')[0];
@@ -1009,7 +1009,7 @@ async function runConstraintTests() {
       periodLimit: 1,
     });
 
-    const batch1 = await executeBillingRun(prisma, crashRun.id);
+    const batch1 = await executeBillingRun(prisma, crashRun.id, { connectionString });
     if (batch1.processedCount !== 1) throw new Error(`Expected batch1 processedCount 1, got ${batch1.processedCount}`);
     if (!batch1.hasMore) throw new Error('Expected hasMore true after partial batch');
     if (batch1.run.status !== 'IN_PROGRESS') {
@@ -1020,7 +1020,7 @@ async function runConstraintTests() {
     }
 
     // Resume execution of the run with allowResume: true
-    const batch2 = await executeBillingRun(prisma, crashRun.id, { allowResume: true });
+    const batch2 = await executeBillingRun(prisma, crashRun.id, { connectionString, allowResume: true });
     if (batch2.processedCount < 1) {
       throw new Error(`Expected batch2 to resume and process at least 1 subscription, got ${batch2.processedCount}`);
     }
@@ -1039,30 +1039,144 @@ async function runConstraintTests() {
     }
   });
 
+  // 30. Monotonic schedule advancement: processing stale/reused periods cannot rewind nextBillingDate
+  await assertResolves('D3-D: Monotonic schedule advancement: processing stale/reused periods cannot rewind nextBillingDate', async () => {
+    const cust = await prisma.customer.findFirstOrThrow();
+    const plan = await prisma.plan.findFirstOrThrow();
+    const prod = await prisma.product.findFirstOrThrow();
+
+    const subMonotonic = await prisma.subscription.create({
+      data: {
+        number: `SUB-MONOTONIC-${runId}`,
+        customerId: cust.id,
+        planId: plan.id,
+        status: 'ACTIVE',
+        billingInterval: BillingInterval.MONTHLY,
+        startDate: new Date('2027-01-01T00:00:00.000Z'),
+        nextBillingDate: new Date('2027-01-01T00:00:00.000Z'),
+        lines: {
+          create: {
+            productId: prod.id,
+            description: 'Monotonic Schedule Item',
+            quantity: 1,
+            unitPrice: 100.00,
+            effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+          },
+        },
+      },
+    });
+
+    // Step 1: Initial invoice for [2027-01-01, 2027-02-01) with advanceSchedule: true
+    const inv1 = await createSubscriptionInvoice(prisma, {
+      subscriptionId: subMonotonic.id,
+      periodStart: '2027-01-01',
+      periodEnd: '2027-02-01',
+      advanceSchedule: true,
+    });
+    if (inv1.isReused) throw new Error('Expected new invoice for step 1');
+
+    let subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-02-01') {
+      throw new Error(`Expected nextBillingDate 2027-02-01, got ${subCheck.nextBillingDate?.toISOString()}`);
+    }
+
+    // Step 2: Simulate that concurrent billing or manual schedule advancement moved schedule forward to 2027-06-01
+    await prisma.subscription.update({
+      where: { id: subMonotonic.id },
+      data: { nextBillingDate: new Date('2027-06-01T00:00:00.000Z') },
+    });
+
+    // Step 3: A stale/replayed worker re-executes the earlier period [2027-01-01, 2027-02-01) with advanceSchedule: true
+    const invReplay = await createSubscriptionInvoice(prisma, {
+      subscriptionId: subMonotonic.id,
+      periodStart: '2027-01-01',
+      periodEnd: '2027-02-01',
+      advanceSchedule: true,
+    });
+    if (!invReplay.isReused) throw new Error('Expected isReused: true for duplicate period');
+
+    // Verify nextBillingDate was NOT rewound to 2027-02-01!
+    subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-06-01') {
+      throw new Error(`Schedule rewound! Expected nextBillingDate to remain 2027-06-01, but got ${subCheck.nextBillingDate?.toISOString()}`);
+    }
+
+    // Step 4: Create a new invoice for an earlier historical period [2027-03-01, 2027-04-01) with advanceSchedule: true
+    const invHist = await createSubscriptionInvoice(prisma, {
+      subscriptionId: subMonotonic.id,
+      periodStart: '2027-03-01',
+      periodEnd: '2027-04-01',
+      advanceSchedule: true,
+    });
+    if (invHist.isReused) throw new Error('Expected new invoice for historical period');
+
+    // Verify nextBillingDate was STILL NOT rewound to 2027-04-01!
+    subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-06-01') {
+      throw new Error(`Schedule rewound! Expected nextBillingDate to remain 2027-06-01, but got ${subCheck.nextBillingDate?.toISOString()}`);
+    }
+
+    // Step 5: BillingRun path with paused interval: a stale paused period [2027-04-01, 2027-05-01)
+    await prisma.subscriptionPauseInterval.create({
+      data: {
+        subscriptionId: subMonotonic.id,
+        startDate: new Date('2027-04-01T00:00:00.000Z'),
+        endDate: new Date('2027-05-01T00:00:00.000Z'),
+        reason: 'Historical pause',
+      },
+    });
+
+    const stalePauseRun = await initializeBillingRun(prisma, {
+      asOfDate: '2027-04-01',
+      subscriptionIdFilter: subMonotonic.id,
+    });
+    await executeBillingRun(prisma, stalePauseRun.id, { connectionString });
+
+    // Verify nextBillingDate was STILL NOT rewound by the paused run!
+    subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-06-01') {
+      throw new Error(`Schedule rewound by pause interval! Expected 2027-06-01, got ${subCheck.nextBillingDate?.toISOString()}`);
+    }
+
+    // Step 6: Valid forward progression [2027-06-01, 2027-07-01) DOES advance
+    const invForward = await createSubscriptionInvoice(prisma, {
+      subscriptionId: subMonotonic.id,
+      periodStart: '2027-06-01',
+      periodEnd: '2027-07-01',
+      advanceSchedule: true,
+    });
+    if (invForward.isReused) throw new Error('Expected new invoice for forward period');
+
+    subCheck = await prisma.subscription.findUniqueOrThrow({ where: { id: subMonotonic.id } });
+    if (subCheck.nextBillingDate?.toISOString().split('T')[0] !== '2027-07-01') {
+      throw new Error(`Forward advance failed! Expected nextBillingDate 2027-07-01, got ${subCheck.nextBillingDate?.toISOString()}`);
+    }
+  });
+
   console.log('\n================================================================================');
   console.log(' PART 6: RECURRENCE DATE ARITHMETIC & CALENDAR ANCHOR TESTS');
   console.log('================================================================================');
 
-  // 30. January 31 to February 28 (common year 2026)
+  // 31. January 31 to February 28 (common year 2026)
   await assertResolves('Calendar: January 31 to February 28 (common year 2026)', async () => {
     const res = computeNextPeriod({ periodStart: '2026-01-31', interval: 'MONTHLY' });
     if (res.periodEndStr !== '2026-02-28') throw new Error(`Expected 2026-02-28, got ${res.periodEndStr}`);
     if (res.anchorDay !== 31) throw new Error(`Expected anchorDay 31, got ${res.anchorDay}`);
   });
 
-  // 31. January 31 to February 29 (leap year 2028)
+  // 32. January 31 to February 29 (leap year 2028)
   await assertResolves('Calendar: January 31 to February 29 (leap year 2028)', async () => {
     const res = computeNextPeriod({ periodStart: '2028-01-31', interval: 'MONTHLY' });
     if (res.periodEndStr !== '2028-02-29') throw new Error(`Expected 2028-02-29, got ${res.periodEndStr}`);
   });
 
-  // 32. August 31 to September 30
+  // 33. August 31 to September 30
   await assertResolves('Calendar: August 31 to September 30', async () => {
     const res = computeNextPeriod({ periodStart: '2026-08-31', interval: 'MONTHLY' });
     if (res.periodEndStr !== '2026-09-30') throw new Error(`Expected 2026-09-30, got ${res.periodEndStr}`);
   });
 
-  // 33. Monthly recurrence across multiple months with anchorDay 31
+  // 34. Monthly recurrence across multiple months with anchorDay 31
   await assertResolves('Calendar: Monthly recurrence across multiple months preserves 31st anchor', async () => {
     const p1 = computeNextPeriod({ periodStart: '2026-01-31', interval: 'MONTHLY' }); // -> Feb 28
     const p2 = computeNextPeriod({ periodStart: p1.periodEnd, interval: 'MONTHLY', anchorDay: p1.anchorDay }); // -> Mar 31
@@ -1075,7 +1189,7 @@ async function runConstraintTests() {
     if (p4.periodEndStr !== '2026-05-31') throw new Error(`p4: expected 2026-05-31, got ${p4.periodEndStr}`);
   });
 
-  // 34. Annual recurrence across leap-day boundaries
+  // 35. Annual recurrence across leap-day boundaries
   await assertResolves('Calendar: Annual recurrence across leap-day boundaries (2024-02-29 -> 2025-02-28 -> 2028-02-29)', async () => {
     const y1 = computeNextPeriod({ periodStart: '2024-02-29', interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
     const y2 = computeNextPeriod({ periodStart: y1.periodEnd, interval: 'YEARLY', anchorDay: 29, anchorMonth: 2 });
@@ -1088,7 +1202,7 @@ async function runConstraintTests() {
     if (y4.periodEndStr !== '2028-02-29') throw new Error(`y4 (leap year): expected 2028-02-29, got ${y4.periodEndStr}`);
   });
 
-  // 35. Continuous and gapless exclusive period-end property
+  // 36. Continuous and gapless exclusive period-end property
   await assertResolves('Calendar: Continuous and gapless exclusive period-end convention', async () => {
     const start = '2026-03-15';
     const period = computeNextPeriod({ periodStart: start, interval: 'MONTHLY' });

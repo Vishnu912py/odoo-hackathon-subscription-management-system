@@ -94,16 +94,16 @@ export async function createSubscriptionInvoice(
     if (existing) {
       if (advanceSchedule) {
         const nextDate = new Date(pEnd);
-        const subForSched = await tx.subscription.findUnique({
-          where: { id: subscriptionId },
-          select: { nextBillingDate: true },
+        await tx.subscription.updateMany({
+          where: {
+            id: subscriptionId,
+            OR: [
+              { nextBillingDate: null },
+              { nextBillingDate: { lt: nextDate } },
+            ],
+          },
+          data: { nextBillingDate: nextDate },
         });
-        if (subForSched && (!subForSched.nextBillingDate || subForSched.nextBillingDate < nextDate)) {
-          await tx.subscription.update({
-            where: { id: subscriptionId },
-            data: { nextBillingDate: nextDate },
-          });
-        }
       }
       return { invoice: existing, isReused: true };
     }
@@ -355,11 +355,17 @@ export async function createSubscriptionInvoice(
       }
     }
 
-    // 13. Advance Next Billing Date if requested
+    // 13. Monotonically Advance Next Billing Date if requested (never rewind)
     if (advanceSchedule) {
       const nextDate = new Date(pEnd);
-      await tx.subscription.update({
-        where: { id: sub.id },
+      await tx.subscription.updateMany({
+        where: {
+          id: sub.id,
+          OR: [
+            { nextBillingDate: null },
+            { nextBillingDate: { lt: nextDate } },
+          ],
+        },
         data: { nextBillingDate: nextDate },
       });
     }
