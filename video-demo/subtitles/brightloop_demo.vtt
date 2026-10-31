@@ -1,0 +1,31 @@
+WEBVTT
+
+00:00:00.500 --> 00:00:09.932
+Welcome to Brightloop Software — a modern, resilient subscription management and recurring revenue platform engineered for high-concurrency SaaS operations.
+
+00:00:10.730 --> 00:00:22.417
+Modern businesses struggle with fractured subscription lifecycles, race conditions in automated billing runs, duplicate invoices, and manual payment reconciliations that bleed revenue.
+
+00:00:23.219 --> 00:00:36.444
+Brightloop solves this from the ground up. Combining strict transaction boundaries, database-enforced state machines, and transparent customer self-service, it guarantees financial correctness at every step.
+
+00:00:37.239 --> 00:00:52.863
+Built on Node.js 24, Express 5, React 19, and PostgreSQL 16 with Prisma ORM. Strict OpenAPI 3.1 contracts ensure seamless type safety and security across the entire stack.
+
+00:00:53.659 --> 00:01:05.587
+Brightloop features role-based access control, session-based authentication with CSRF protection, and segregated workspaces for administrators, billing specialists, and customers.
+
+00:01:06.390 --> 00:01:19.254
+Subscriptions follow a rigorous lifecycle from quotation to activation. Plan policies enforce pause intervals, renewal rules, and automatic closures, backed by atomic database constraints.
+
+00:01:20.049 --> 00:01:32.385
+Billing runs utilize database-level advisory locking and recovery leases to guarantee crash safety. Invoices calculate precise tax and discount rules, with idempotent payment recording.
+
+00:01:33.189 --> 00:01:44.421
+Customers enjoy a dedicated self-service portal to review active subscriptions, download invoices, and inspect payment histories — completely isolated at the database level.
+
+00:01:45.219 --> 00:01:55.971
+Our reporting persistence layer delivers sub-second analytics across 100,000 invoices under RepeatableRead transaction snapshots — fully verified for enterprise scale.
+
+00:01:56.769 --> 00:02:06.585
+Brightloop: predictable recurring revenue, bulletproof persistence, and exceptional user experience. Built with passion for the Odoo Hackathon.
