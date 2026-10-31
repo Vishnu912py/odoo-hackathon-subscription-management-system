@@ -32,8 +32,8 @@ Frontend integration, registration/sign-in, invoice details and payment entry ar
 - [x] D1: deliver the domain model, relationships, constraints, baseline indexes and synthetic demo fixtures.
 - [x] D2: implement the shared Prisma 7 schema and two PostgreSQL migrations under `backend/prisma` (PR #4).
 - [x] Add seed tooling, static schema verification and live database constraint tests; configure PostgreSQL 16 CI.
-- [ ] D3: implement transactional invoice creation, discount usage, payment allocation and recoverable billing progress, with retry/concurrency tests.
-- [ ] D4: implement filterable, customer-scoped reporting queries and reconcile their totals against fixtures.
+- [x] D3: implement transactional invoice creation, discount usage, payment allocation and recoverable billing progress, with retry/concurrency tests (PR #9).
+- [x] D4: implement filterable, customer-scoped reporting queries and reconcile their totals against fixtures.
 - [ ] D5: seed thousands of subscriptions, measure query performance and tune indexes; support page-level performance verification.
 
 Session, idempotency, billing-run and outbox tables exist; their runtime workflows are still pending.
