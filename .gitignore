@@ -1,9 +1,18 @@
+# Local dependencies, builds and generated clients
 node_modules/
-.env
-.env.*
-!.env.example
+**/node_modules/
 dist/
 build/
 coverage/
+backend/dist/
+backend/src/generated/
+backend/coverage/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
 *.log
 .DS_Store
+__pycache__/
+*.pyc

@@ -1,8 +1,8 @@
 # Architecture and shared contracts
 
-Status: proposed guidance, not an existing system. No application code or API exists yet.
+Status: an Express/TypeScript backend foundation exists in `backend/`; domain schema, migrations and business handlers are pending. Health checks and shared infrastructure are implemented; business contract operations return explicit 501 responses.
 
-The agreed architecture baseline is **React + Vite + TypeScript** on the frontend, **Node.js + Express** on the backend, **PostgreSQL** for relational persistence, and **Prisma** (with Prisma Migrate) as the confirmed ORM.
+The agreed architecture baseline is **React + Vite + TypeScript** on the frontend, **Node.js 24 + Express 5 + TypeScript** on the backend, **PostgreSQL 16** for relational persistence, and **Prisma ORM 7.10.1 with Prisma Migrate**, as confirmed by Vishnu. Backend package location is `backend/`; schema and migrations live in `backend/prisma`. Pinned packages are specified in `backend/package.json` and `backend/package-lock.json`.
 
 The [ER diagram and schema handoff](er-diagram.md) develops the proposed entities below into a refined PostgreSQL schema and data integrity specification.
 
@@ -10,7 +10,7 @@ The newer [API contracts](api-contracts.md) define the HTTP/JSON interface basel
 
 ## Decisions register
 
-The core billing policies and engineering choices have been formally confirmed by Team Lead Vishnu912py:
+The core billing policies and engineering choices have been formally confirmed by Team Lead Vishnu912py in the [PR #4 review](https://github.com/Vishnu912py/odoo-hackathon-subscription-management-system/pull/4#pullrequestreview-5721556703):
 
 | Decision | Status | Confirmed Policy / Implementation |
 | --- | --- | --- |
@@ -18,10 +18,10 @@ The core billing policies and engineering choices have been formally confirmed b
 | 2. Tax and discount calculation order | **Confirmed** | Discounts apply before tax (reducing the taxable base); taxes are exclusive and additive. Rounding is half-up to 2 decimals per line. |
 | 3. Discount stacking | **Confirmed** | No discount stacking in v1. Select the single eligible rule producing the greatest savings (ties resolved deterministically by rule UUID). |
 | 4. Cancellation and rebilling | **Confirmed** | Terminal cancellation permanently reserves the `(subscription_id, period_start)` identity. No same-period rebilling in v1. Requires 0 payments. |
-| 5. Pause/resume recurrence arithmetic | **Confirmed** | Preserve the original calendar recurrence anchor. Skip unbilled periods within effective pause intervals; resume on next original boundary. |
+| 5. Pause/resume recurrence arithmetic | **Confirmed** | Preserve the original calendar recurrence anchor. Skip unbilled periods within effective pause intervals; resume on next original boundary without extending expiry. |
 | 6. Partial and overpayment handling | **Confirmed** | Multiple partial payments permitted; overpayments strictly rejected (`amount <= total - amount_paid`). Atomic balance updates. |
 | 7. Currency, timezone and rounding | **Confirmed** | Currency `INR`, business timezone `Asia/Kolkata`, exact decimal types (`NUMERIC(18,2)` totals, `NUMERIC(18,4)` unit prices/quantities, `NUMERIC(7,4)` rates). |
-| 8. Tooling and directory ownership | **Confirmed** | Prisma ORM + Prisma Migrate confirmed; database implementation centralized under `/database`. |
+| 8. Tooling and schema location | **Confirmed** | Prisma ORM 7.10.1 + Prisma Migrate; database schema and migrations located in `backend/prisma`, generated client in `backend/src/generated/prisma`. |
 
 ## Proposed entities
 

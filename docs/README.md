@@ -2,6 +2,8 @@
 
 Shared context for the three contributors and coding assistants. Read alongside the root README.
 
+The [backend setup guide](../backend/README.md) describes the runnable server foundation, module ownership and Prisma/Migrate workflow. Business handlers and domain migrations are not implemented yet.
+
 ## Documentation map
 
 - [Requirements](requirements.md): source scope and acceptance criteria.

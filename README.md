@@ -5,65 +5,48 @@ Build a unified platform for Brightloop Software to manage products, recurring p
 ## Technology stack
 
 The confirmed technology stack is:
-- **Frontend:** React + Vite + TypeScript (`/frontend`)
-- **Backend:** Node.js + Express + TypeScript (`/backend`)
-- **Database:** PostgreSQL 16 + Prisma ORM 5.22.0 (`/database`)
+- **Frontend:** React + Vite + TypeScript (`frontend/`)
+- **Backend:** Node.js 24 + Express 5 + TypeScript (`backend/`)
+- **Database:** PostgreSQL 16 + Prisma ORM 7.10.1 (`backend/prisma/`)
 - **Contracts:** OpenAPI 3.1 REST JSON (`docs/api/openapi.json`)
 
 ## Directory structure
 
 ```text
 ├── frontend/               # React + Vite + TypeScript web application
-├── database/               # PostgreSQL schema, Prisma models, migrations, seeds & tests
-│   ├── prisma/             # schema.prisma, migrations, and idempotent seed.ts
-│   ├── scripts/            # verify_schema_integrity.py and test_db_constraints.ts
-│   └── README.md           # Database developer guide
+├── backend/                # Express 5 + TypeScript API foundation
+│   ├── prisma/             # Single authoritative schema.prisma, migrations & seed
+│   ├── src/                # App, server, config, modules & db client
+│   ├── test/               # HTTP, config & database integration tests
+│   └── prisma.config.ts    # Prisma 7 CLI configuration
 ├── docs/                   # Specifications, ER diagrams, API contracts, and wireframes
 └── .github/workflows/      # Automated CI workflows (PostgreSQL 16 service integration)
 ```
 
-## Database setup and verification
+## Backend setup and verification
 
-Prerequisites: Node.js (v20+ or v22+), npm, Python (v3.10+).
+Prerequisites: **Node.js 24.x**, npm, and PostgreSQL for database-backed work.
 
-### 1. Static validation (No database server required)
+From repository root:
 
 ```bash
-# Install root dependencies
-npm install
-
-# Validate Prisma schema
-npx prisma validate --schema=database/prisma/schema.prisma
-
-# Generate Prisma Client to node_modules/@prisma/client
+cd backend
+npm ci
 npm run prisma:generate
-
-# Run static schema, migration DDL, and ER documentation verifier
-npm run db:validate
-
-# Type-check TypeScript seed and constraint test scripts
-npx tsc --noEmit database/prisma/seed.ts database/scripts/test_db_constraints.ts
+cp .env.example .env
 ```
 
-### 2. Live database operations (Requires running PostgreSQL)
+Edit `backend/.env` to point `DATABASE_URL` to your PostgreSQL database.
 
 ```bash
-# Configure connection string in .env
-cp .env.example .env
-# Edit DATABASE_URL in .env
+# Verify schema & run test suite
+npm run check
 
-# Apply migrations
-npm run prisma:migrate
-
-# Or deploy in staging/production/CI
-npm run prisma:deploy
-
-# Execute idempotent synthetic test seed fixtures (safe to run multiple times)
-npm run prisma:seed
-
-# Run PostgreSQL constraint and concurrency integration tests
-npm run test:db
+# Start development server
+npm run dev
 ```
+
+Open `http://localhost:3000/health/live`. `/health/ready` verifies PostgreSQL connection readiness.
 
 ## Team responsibilities
 
@@ -94,7 +77,7 @@ Subscriptions follow **Draft -> Quotation -> Confirmed -> Active -> Closed**. Pa
 3. Review confirmed billing defaults in [architecture](docs/architecture.md) and [API impact](docs/api-impact.md).
 4. Follow [the roadmap](plan.md) and [contribution workflow](contributing.md).
 
-Never commit credentials or real customer data.
+Application setup and test commands are maintained in [backend/README.md](backend/README.md). Never commit credentials or real customer data.
 
 ## Documentation index
 
@@ -102,4 +85,4 @@ Never commit credentials or real customer data.
 - [`contributing.md`](./contributing.md): Contribution workflow and quality expectations.
 - [`plan.md`](./plan.md): Current implementation roadmap and milestones.
 - [`docs/README.md`](./docs/README.md): Shared documentation structure and expansion guidance.
-- [`database/README.md`](./database/README.md): Database layer setup, migrations, and test commands.
+- [`backend/README.md`](./backend/README.md): Backend setup, Prisma 7 workflow, and test commands.
