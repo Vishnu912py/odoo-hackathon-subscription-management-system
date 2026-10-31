@@ -44,12 +44,6 @@
 .signout-topbar-btn:hover { background: #fef2f2; }
 
 /* Connection Status Pill */
-.live-connection-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; padding: 6px 12px; background: #f7faf8; border: 1px solid #dce6e0; border-radius: 20px; color: #374151; }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.status-dot.healthy { background: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2); }
-.status-dot.degraded { background: #d97706; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2); }
-.connection-refresh-btn { background: none; border: none; font-size: 14px; cursor: pointer; padding: 0 2px; color: #6b7280; line-height: 1; min-height: auto; }
-.connection-refresh-btn:hover { color: #111827; }
 
 /* Workspace Containers */
 .live-workspace { max-width: 1360px; margin: auto; padding: 32px; }
@@ -112,7 +106,6 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* Auth Views */
 .live-auth-shell { max-width: 500px; margin: 40px auto; display: flex; flex-direction: column; gap: 20px; }
-.auth-shell-header { display: flex; justify-content: center; }
 .live-auth-card { padding: 32px; background: white; border: 1px solid #e2eae4; border-radius: 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04); }
 .auth-card-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
 .auth-brand-badge { width: 44px; height: 44px; border-radius: 12px; background: #176b4b; color: white; display: grid; place-items: center; font-size: 24px; font-weight: 800; flex-shrink: 0; }
@@ -139,12 +132,6 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Capabilities Tags */
-.capabilities-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.cap-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
-.cap-tag.allowed { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
-.cap-tag.readonly { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
-.capabilities-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; font-size: 12px; }
-.capabilities-label { font-weight: 600; color: #374151; }
 
 /* Invoices & Detail */
 .invoice-link-btn { font-weight: 700; color: #176b4b; text-decoration: underline; background: none; border: none; padding: 0; cursor: pointer; }
@@ -183,7 +170,6 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .live-app-shell .topbar-actions { gap: 6px; }
   .live-app-shell .topbar-actions .topbar-action-btn { display: none; }
   .live-app-shell .breadcrumbs { display: none; }
-  .live-app-shell .live-connection-pill { font-size: 10px; padding: 5px 8px; }
   .live-app-shell .live-pagination { display: flex; flex-wrap: wrap; gap: 8px; }
   .live-app-shell .section-header-row h2 { overflow-wrap: anywhere; }
   .live-workspace { padding: 16px 12px; }
@@ -192,3 +178,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .connection-mode { padding: 10px 14px; }
   .stat-value { font-size: 22px; }
 }
+
+.billing-history { margin-top: 20px; border-top: 1px solid #e2eae4; padding-top: 14px; }
+.billing-history summary { cursor: pointer; font-weight: 600; color: #40574a; }
+.billing-history[open] summary { margin-bottom: 12px; }

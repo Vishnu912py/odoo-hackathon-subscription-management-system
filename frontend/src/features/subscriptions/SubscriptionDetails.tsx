@@ -286,28 +286,10 @@ export default function SubscriptionDetails({
             </div>
           )}
 
-          {/* Lifecycle Capabilities & Actions */}
-          <div className="capabilities-strip" aria-label="Backend lifecycle permissions">
-            <span>Server Capabilities:</span>
-            <span className={canQuote ? 'allowed' : 'disallowed'}>Quote: {canQuote ? 'Yes' : 'No'}</span>
-            <span>·</span>
-            <span className={canConfirm ? 'allowed' : 'disallowed'}>Confirm: {canConfirm ? 'Yes' : 'No'}</span>
-            <span>·</span>
-            <span className={canActivate ? 'allowed' : 'disallowed'}>Activate: {canActivate ? 'Yes' : 'No'}</span>
-            <span>·</span>
-            <span className={canPause ? 'allowed' : 'disallowed'}>Pause: {canPause ? 'Yes' : 'No'}</span>
-            <span>·</span>
-            <span className={canResume ? 'allowed' : 'disallowed'}>Resume: {canResume ? 'Yes' : 'No'}</span>
-            <span>·</span>
-            <span className={canRenew ? 'allowed' : 'disallowed'}>Renew: {canRenew ? 'Yes' : 'No'}</span>
-            <span>·</span>
-            <span className={canClose ? 'allowed' : 'disallowed'}>Close: {canClose ? 'Yes' : 'No'}</span>
-          </div>
-
           {/* Action buttons (only displayed if capability exists or for authorized role actions) */}
           <div className="subscription-actions-bar">
             {caps?.can_edit && role !== 'customer' && <button disabled={busy || !!pendingAction} onClick={() => setEditing(true)}>Edit draft</button>}
-            <span className="action-heading">Lifecycle Actions:</span>
+            <span className="action-heading">Actions:</span>
 
             {/* Quote Action */}
             {canQuote && (role === 'admin' || role === 'staff') && (

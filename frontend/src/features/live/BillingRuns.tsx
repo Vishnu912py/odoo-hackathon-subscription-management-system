@@ -52,14 +52,15 @@ export default function BillingRuns({ onChanged, onExpired }: { onChanged: () =>
     </button>
     {error !== null && <FormAlert error={error} />}
     {run && <p role="status">Billing {run.status.replaceAll('_', ' ')} · {run.created_count} generated · {run.reused_count} reused · {run.failed_count} failed.
-      {['queued', 'running'].includes(run.status) && ' Waiting for the billing worker.'}
+      {['queued', 'running'].includes(run.status) && ' Processing invoices…'}
       {run.next_run_required && ' More periods require processing.'}</p>}
     {run?.errors.map((item, index) => <p key={index}>{item.period_start}: {item.message}</p>)}
-    <h4>Billing run history</h4>
+    <details className="billing-history"><summary>Billing history</summary>
     <button onClick={() => setRevision(v => v + 1)}>Refresh billing history</button>
     {history?.data.map(item => <p key={item.id}>{new Date(item.created_at).toLocaleString()} · through {item.as_of} · {item.status.replaceAll('_', ' ')} · {item.created_count} generated · {item.failed_count} failed
       {(['failed', 'completed_with_errors'].includes(item.status) || (item.status === 'completed' && item.next_run_required)) && <button disabled={busy || !!pending || Boolean(run && ['queued', 'running'].includes(run.status))} onClick={() => void start(item.id)}>Retry failed periods</button>}
     </p>)}
     <button disabled={page <= 1} onClick={() => setPage(v => v - 1)}>Previous runs</button> <span>Page {page} of {Math.max(1, history?.meta.total_pages ?? 1)}</span> <button disabled={!history || page >= history.meta.total_pages} onClick={() => setPage(v => v + 1)}>Next runs</button>
+    </details>
   </div>
 }

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../../api/client'
 import { money } from '../../api/format'
 import type {
-  InvoiceSummary,
   InvoiceSummaryListResponse,
   OverviewResponse,
   PaymentListResponse,
@@ -47,48 +46,6 @@ function RoleBadge({ role }: { role: Session['user']['role'] }) {
     return <span className="role-chip staff-chip" title="Staff operational access">👥 Staff Operations</span>
   }
   return <span className="role-chip customer-chip" title="Customer self-service portal">🏢 Customer Portal</span>
-}
-
-function ConnectionStatus() {
-  const [check, setCheck] = useState(0)
-  const [status, setStatus] = useState({ api: 'Checking…', database: 'Checking…' })
-
-  useEffect(() => {
-    const controller = new AbortController()
-    void Promise.allSettled([
-      api.health('live', controller.signal),
-      api.health('ready', controller.signal),
-    ]).then(([live, ready]) => {
-      if (controller.signal.aborted) return
-      setStatus({
-        api: live.status === 'fulfilled' && live.value.data.status === 'ok' ? 'Reachable' : 'Unavailable',
-        database: ready.status === 'fulfilled' && ready.value.data.database === 'connected' ? 'Connected' : 'Not ready',
-      })
-    })
-    return () => controller.abort()
-  }, [check])
-
-  const allHealthy = status.api === 'Reachable' && status.database === 'Connected'
-
-  return (
-    <div className="live-connection-pill" aria-label="Backend connection status">
-      <span className={`status-dot ${allHealthy ? 'healthy' : 'degraded'}`} aria-hidden="true" />
-      <span className="connection-text">
-        API: <strong>{status.api}</strong> · DB: <strong>{status.database}</strong>
-      </span>
-      <button
-        type="button"
-        className="connection-refresh-btn"
-        title="Check connection health"
-        onClick={() => {
-          setStatus({ api: 'Checking…', database: 'Checking…' })
-          setCheck(v => v + 1)
-        }}
-      >
-        ↻
-      </button>
-    </div>
-  )
 }
 
 interface RecordsProps {
@@ -380,16 +337,6 @@ function InvoicesView({
     )
   }
 
-  const getInvoiceCaps = (inv: InvoiceSummary) => {
-    const caps: string[] = []
-    if (inv.capabilities.can_record_payment) caps.push('Payment')
-    if (inv.capabilities.can_confirm) caps.push('Confirm')
-    if (inv.capabilities.can_cancel) caps.push('Cancel')
-    if (inv.capabilities.can_send) caps.push('Send')
-    if (inv.capabilities.can_print) caps.push('Print')
-    return caps
-  }
-
   return (
     <div className="panel table-scroll">
       <table>
@@ -401,13 +348,11 @@ function InvoicesView({
             <th>Due date</th>
             <th>Total</th>
             <th>Balance due</th>
-            <th>Capabilities</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {result.data.map(row => {
-            const caps = getInvoiceCaps(row)
             return (
               <tr key={row.id}>
                 <td>
@@ -429,17 +374,6 @@ function InvoicesView({
                 <td>{row.due_date}</td>
                 <td>{money(row.total)}</td>
                 <td className="font-semibold">{money(row.balance_due)}</td>
-                <td>
-                  {caps.length > 0 ? (
-                    <div className="capabilities-tags">
-                      {caps.map(c => (
-                        <span key={c} className="cap-tag allowed">{c}</span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="cap-tag readonly">Read-only</span>
-                  )}
-                </td>
                 <td>
                   <button
                     className="secondary-button table-action-button"
@@ -576,7 +510,7 @@ export default function LiveWorkspace() {
           <h2>RevOps Shield</h2>
           <div className="loading-state">
             <span className="spinner" aria-hidden="true" />
-            <p>Restoring session from secure credentials…</p>
+            <p>Loading your workspace…</p>
           </div>
         </div>
       </main>
@@ -588,9 +522,6 @@ export default function LiveWorkspace() {
     return (
       <main className="live-workspace">
         <div className="live-auth-shell">
-          <header className="auth-shell-header">
-            <ConnectionStatus />
-          </header>
           <AuthView
             invitation={invitation}
             resetToken={resetToken}
@@ -660,7 +591,6 @@ export default function LiveWorkspace() {
               >
                 <span className="nav-icon" aria-hidden="true">{item.icon}</span>
                 <span>{item.label}</span>
-                {item.id === 'Staff' && <span className="nav-admin-tag">Admin</span>}
               </button>
             ))}
           </div>
@@ -669,9 +599,7 @@ export default function LiveWorkspace() {
         {/* SIDEBAR FOOTER */}
         <div className="sidebar-bottom">
           <div className="session-info-card">
-            <div className="session-security-icon" aria-hidden="true">🔒</div>
             <div className="session-meta">
-              <span className="session-label">Session Active</span>
               <span className="session-id">{user.email}</span>
             </div>
           </div>
@@ -702,33 +630,10 @@ export default function LiveWorkspace() {
             <div className="breadcrumbs">
               <span>RevOps</span>
               <span>/</span>
-              <RoleBadge role={user.role} />
-              <span>/</span>
               <strong>{navItems.find(n => n.id === activePage)?.label ?? activePage}</strong>
             </div>
           </div>
 
-          <div className="topbar-actions">
-            <ConnectionStatus />
-            <button
-              className="secondary-button topbar-action-btn"
-              disabled={signingOut}
-              title="Refresh session data"
-              onClick={() => {
-                setError(null)
-                setRevision(v => v + 1)
-              }}
-            >
-              ↻ Refresh
-            </button>
-            <button
-              className="secondary-button topbar-action-btn signout-topbar-btn"
-              disabled={signingOut}
-              onClick={() => void signOut()}
-            >
-              {signingOut ? 'Signing out…' : 'Sign out'}
-            </button>
-          </div>
         </header>
 
         <div className="page-content live-page-content">

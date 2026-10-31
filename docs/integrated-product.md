@@ -36,6 +36,8 @@ Customer records created by staff are billing profiles, not automatically verifi
 
 Draft subscriptions support editing lines, prices, taxes, terms and dates. Details show paginated lifecycle history, related invoices, payment history and delivery attempts. Lists expose date/status/search filters; reports support plan filtering, including customer-owned plans. Administrators can inspect persisted billing runs and retry failed runs. Staff can retry failed invoice deliveries.
 
+The customer-facing UI omits API/database health badges and permission-inspection labels. Available actions still follow server permissions. Account identity and sign-out remain in the sidebar; billing history expands on demand.
+
 ## Worker and delivery operation
 
 - `npm --prefix backend run billing:watch` runs a processing pass every 30 seconds. `billing:run` runs one pass. The root development command includes the watcher.

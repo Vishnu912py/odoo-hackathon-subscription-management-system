@@ -203,23 +203,6 @@ export default function InvoiceDetails({ id, userId, onClose, onChanged, onExpir
             {invoice.capabilities.can_print && <a className="secondary-button" href={`/api/v1/invoices/${id}/pdf`} target="_blank" rel="noreferrer">Print / download PDF</a>}
           </div>
 
-          {/* Capabilities inspection */}
-          <div className="capabilities-bar" aria-label="Invoice permissions">
-            <span className="capabilities-label">Permitted actions:</span>
-            {invoice.capabilities.can_record_payment && <span className="cap-tag allowed">✓ Record payment</span>}
-            {invoice.capabilities.can_confirm && <span className="cap-tag allowed">✓ Confirm</span>}
-            {invoice.capabilities.can_cancel && <span className="cap-tag allowed">✓ Cancel</span>}
-            {invoice.capabilities.can_send && <span className="cap-tag allowed">✓ Send email</span>}
-            {invoice.capabilities.can_print && <span className="cap-tag allowed">✓ Print PDF</span>}
-            {!invoice.capabilities.can_record_payment &&
-             !invoice.capabilities.can_confirm &&
-             !invoice.capabilities.can_cancel &&
-             !invoice.capabilities.can_send &&
-             !invoice.capabilities.can_print && (
-              <span className="cap-tag readonly">Read-only view · No state changes permitted</span>
-            )}
-          </div>
-
           <h3>Line Items</h3>
           <div className="table-scroll">
             <table>
