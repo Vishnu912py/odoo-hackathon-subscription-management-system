@@ -25,6 +25,9 @@
     "test:db": "tsx scripts/test_db_constraints.ts",
     "test:verify": "python scripts/verify_schema_integrity.py",
     "test:integration": "tsx --test test/integration/*.test.ts",
+    "benchmark:generate": "tsx scripts/generate_benchmark_data.ts",
+    "benchmark:run": "tsx scripts/benchmark_reporting.ts",
+    "benchmark": "tsx scripts/generate_benchmark_data.ts && tsx scripts/benchmark_reporting.ts",
     "admin:create": "tsx scripts/create_admin.ts",
     "mail:deliver": "tsx scripts/auth_mail_worker.ts"
   },
